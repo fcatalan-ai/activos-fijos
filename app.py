@@ -1,8 +1,3 @@
-bash
-
-cat /home/claude/activos_app/app.py
-Salida
-
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file
 import sqlite3, os, io, base64, struct, zlib
 from datetime import datetime
