@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Acceso — Activos Fijos</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;display:flex;align-items:center;justify-content:center}
+.card{background:#fff;border-radius:12px;padding:36px;width:100%;max-width:380px;box-shadow:0 2px 16px rgba(0,0,0,0.1)}
+.logo{text-align:center;margin-bottom:24px}
+.logo h1{font-size:20px;color:#1F3864;font-weight:700}
+.logo p{font-size:13px;color:#888;margin-top:4px}
+label{font-size:13px;color:#555;display:block;margin-bottom:4px;margin-top:14px}
+input{width:100%;padding:10px 12px;border:1px solid #ddd;border-radius:8px;font-size:14px}
+input:focus{outline:none;border-color:#2E74B5}
+.btn{width:100%;padding:11px;background:#1F3864;color:#fff;border:none;border-radius:8px;font-size:15px;cursor:pointer;margin-top:20px}
+.btn:hover{background:#2E74B5}
+.error{color:#c00;font-size:13px;margin-top:12px;text-align:center}
+.hint{font-size:11px;color:#aaa;text-align:center;margin-top:14px}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="logo">
+    <h1>🏫 Activos Fijos</h1>
+    <p>Sistema de Control de Inventario</p>
+  </div>
+  <form method="POST">
+    <label>Correo electrónico</label>
+    <input type="email" name="email" placeholder="usuario@colegio.cl" required autofocus>
+    <label>Contraseña</label>
+    <input type="password" name="password" placeholder="••••••••" required>
+    <button class="btn" type="submit">Ingresar</button>
+    {% if error %}<div class="error">{{ error }}</div>{% endif %}
+  </form>
+  <div class="hint">Acceso solo para personal autorizado</div>
+</div>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Ficha — {{ a.id }}</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:16px}
+.card{background:#fff;border-radius:12px;max-width:480px;margin:0 auto;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.1)}
+.head{background:#1F3864;color:#fff;padding:16px 20px}
+.head h1{font-size:18px;font-weight:700}
+.head p{font-size:12px;color:#9BB8D8;margin-top:3px}
+.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;margin-top:8px}
+.badge-bueno{background:#EAF3DE;color:#27500A}
+.badge-regular{background:#FAEEDA;color:#633806}
+.badge-malo{background:#FCEBEB;color:#791F1F}
+.body{padding:20px}
+.section{margin-bottom:16px}
+.section-title{font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f0f0f0}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.field label{font-size:11px;color:#999;display:block;margin-bottom:2px}
+.field .val{font-size:14px;font-weight:600;color:#1a1a1a}
+.footer{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#999;border-top:1px solid #eee}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="head">
+    <h1>{{ a.id }}</h1>
+    <p>{{ a.tipo }} — {{ a.subtipo }}</p>
+    <span class="badge badge-{{ a.estado|lower if a.estado else 'bueno' }}">{{ a.estado }}</span>
+  </div>
+  <div class="body">
+    <div class="section">
+      <div class="section-title">Identificación</div>
+      <div class="row">
+        <div class="field"><label>Marca</label><div class="val">{{ a.marca or '—' }}</div></div>
+        <div class="field"><label>Modelo</label><div class="val">{{ a.modelo or '—' }}</div></div>
+      </div>
+      <div class="field" style="margin-bottom:10px"><label>N° Serie</label><div class="val">{{ a.serie or '—' }}</div></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Ubicación y responsable</div>
+      <div class="row">
+        <div class="field"><label>Edificio</label><div class="val">{{ a.edificio or '—' }}</div></div>
+        <div class="field"><label>Sala</label><div class="val">{{ a.sala or '—' }}</div></div>
+      </div>
+      <div class="field" style="margin-bottom:10px"><label>Responsable</label><div class="val">{{ a.responsable or '—' }}</div></div>
+    </div>
+    <div class="section">
+      <div class="section-title">Datos de compra</div>
+      <div class="row">
+        <div class="field"><label>Fecha compra</label><div class="val">{{ a.fecha_compra or '—' }}</div></div>
+        <div class="field"><label>Precio</label><div class="val">${{ "{:,.0f}".format(a.precio or 0) }}</div></div>
+      </div>
+      <div class="row">
+        <div class="field"><label>Documento</label><div class="val">{{ a.documento or '—' }}</div></div>
+        <div class="field"><label>Vida útil</label><div class="val">{{ a.vida_util or '—' }} años</div></div>
+      </div>
+    </div>
+    {% if a.observaciones %}
+    <div class="section">
+      <div class="section-title">Observaciones</div>
+      <div style="font-size:13px;color:#555">{{ a.observaciones }}</div>
+    </div>
+    {% endif %}
+  </div>
+  <div class="footer">Sistema de Activos Fijos — Colegio</div>
+</div>
+</body>
+</html>
