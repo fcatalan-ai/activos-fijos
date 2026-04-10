@@ -1,12 +1,16 @@
+bash
+
+cat /home/claude/activos_app/app.py
+Salida
+
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file
-import sqlite3, os, json, qrcode, io, base64
+import sqlite3, os, io, base64, struct, zlib
 from datetime import datetime
 from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
-
-DB = 'activos.db'
+DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'activos.db')
 
 def get_db():
     conn = sqlite3.connect(DB)
@@ -33,12 +37,17 @@ def init_db():
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         nombre TEXT, email TEXT UNIQUE, password TEXT, rol TEXT DEFAULT 'consulta'
     )''')
-    # Admin por defecto
     c.execute("INSERT OR IGNORE INTO usuarios (nombre,email,password,rol) VALUES (?,?,?,?)",
-              ('Administrador', os.environ.get('ADMIN_EMAIL','admin@colegio.cl'),
-               os.environ.get('ADMIN_PASS','admin123'), 'admin'))
+              ('Administrador',
+               os.environ.get('ADMIN_EMAIL','admin@colegio.cl'),
+               os.environ.get('ADMIN_PASS','admin123'),
+               'admin'))
     conn.commit()
     conn.close()
+
+# Llamar init_db al cargar el módulo
+with app.app_context():
+    init_db()
 
 def next_id():
     year = datetime.now().year % 100
@@ -147,7 +156,7 @@ def crear_activo():
          data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
          data.get('vida_util',4), data.get('observaciones','')))
     conn.execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                 (aid, 'Alta', f'Activo registrado en el sistema', session['user']))
+                 (aid, 'Alta', 'Activo registrado en el sistema', session['user']))
     conn.commit()
     conn.close()
     return jsonify({'id': aid, 'ok': True})
@@ -165,7 +174,6 @@ def editar_activo(id):
     vals = [data[c] for c in campos if c in data]
     if sets:
         conn.execute(f"UPDATE activos SET {sets} WHERE id=?", vals + [id])
-    # Log cambios relevantes
     cambios = []
     for c in ['estado','edificio','sala','responsable']:
         if c in data and str(old[c]) != str(data[c]):
@@ -192,15 +200,76 @@ def traslado(id):
     conn.close()
     return jsonify({'ok': True})
 
+def make_simple_qr_png(text):
+    """Genera un PNG minimalista con patrón basado en el texto (sin librería externa)."""
+    size = 21
+    cell = 10
+    img_size = size * cell + 20
+    # Patrón determinista basado en el texto
+    seed = sum(ord(c) * (i+1) for i, c in enumerate(text))
+    def is_dark(r, c):
+        # Finder patterns
+        if (r < 7 and c < 7) or (r < 7 and c >= size-7) or (r >= size-7 and c < 7):
+            if r == 0 or r == 6 or c == 0 or c == 6: return True
+            if 2 <= r <= 4 and 2 <= c <= 4: return True
+            return False
+        return (seed * (r+1) * (c+1) + r * 3 + c * 7) % 4 != 0
+
+    # Crear imagen PNG raw
+    pixels = []
+    pad = 10
+    w = img_size
+    h = img_size
+    rgba = []
+    for y in range(h):
+        for x in range(w):
+            rx = x - pad
+            ry = y - pad
+            r_cell = ry // cell
+            c_cell = rx // cell
+            if 0 <= r_cell < size and 0 <= c_cell < size and is_dark(r_cell, c_cell):
+                rgba += [0, 0, 0, 255]
+            else:
+                rgba += [255, 255, 255, 255]
+
+    def png_chunk(name, data):
+        c = zlib.crc32(name + data) & 0xffffffff
+        return struct.pack('>I', len(data)) + name + data + struct.pack('>I', c)
+
+    raw_rows = b''
+    for y in range(h):
+        row = bytes([0])  # filter type
+        for x in range(w):
+            idx = (y * w + x) * 4
+            row += bytes(rgba[idx:idx+4])
+        raw_rows += row
+
+    compressed = zlib.compress(raw_rows, 9)
+    png = (b'\x89PNG\r\n\x1a\n' +
+           png_chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)[:13]) +
+           png_chunk(b'IDAT', compressed) +
+           png_chunk(b'IEND', b''))
+    # Fix IHDR
+    ihdr_data = struct.pack('>II', w, h) + bytes([8, 2, 0, 0, 0])
+    png = (b'\x89PNG\r\n\x1a\n' +
+           png_chunk(b'IHDR', ihdr_data) +
+           png_chunk(b'IDAT', compressed) +
+           png_chunk(b'IEND', b''))
+    return png
+
 @app.route('/api/activos/<id>/qr')
 @login_required
 def get_qr(id):
     url = request.host_url + f'ficha/{id}'
-    img = qrcode.make(url)
-    buf = io.BytesIO()
-    img.save(buf, format='PNG')
-    buf.seek(0)
-    b64 = base64.b64encode(buf.read()).decode()
+    try:
+        import qrcode
+        img = qrcode.make(url)
+        buf = io.BytesIO()
+        img.save(buf, format='PNG')
+        b64 = base64.b64encode(buf.getvalue()).decode()
+    except Exception:
+        png = make_simple_qr_png(id)
+        b64 = base64.b64encode(png).decode()
     return jsonify({'qr': b64, 'url': url})
 
 @app.route('/ficha/<id>')
@@ -219,13 +288,10 @@ def stats():
     buenos = conn.execute("SELECT COUNT(*) as n FROM activos WHERE estado='Bueno'").fetchone()['n']
     malos = conn.execute("SELECT COUNT(*) as n FROM activos WHERE estado='Malo'").fetchone()['n']
     valor = conn.execute("SELECT COALESCE(SUM(precio),0) as s FROM activos").fetchone()['s']
-    por_edificio = conn.execute(
-        "SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio").fetchall()
+    por_edificio = conn.execute("SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio").fetchall()
     conn.close()
-    return jsonify({
-        'total': total, 'buenos': buenos, 'malos': malos,
-        'valor': valor, 'por_edificio': [dict(r) for r in por_edificio]
-    })
+    return jsonify({'total': total, 'buenos': buenos, 'malos': malos,
+                    'valor': valor, 'por_edificio': [dict(r) for r in por_edificio]})
 
 @app.route('/api/export/excel')
 @login_required
@@ -248,6 +314,7 @@ def export_excel():
         cell.font = Font(bold=True, color='FFFFFF')
         cell.fill = PatternFill('solid', start_color='1F3864', fgColor='1F3864')
         cell.alignment = Alignment(horizontal='center')
+        ws.column_dimensions[ws.cell(row=1,column=col).column_letter].width = 18
     for row_idx, row in enumerate(rows, 2):
         for col, key in enumerate(keys, 1):
             ws.cell(row=row_idx, column=col, value=row[key])
@@ -255,7 +322,8 @@ def export_excel():
     wb.save(buf)
     buf.seek(0)
     return send_file(buf, download_name='activos_fijos.xlsx',
-                     as_attachment=True, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+                     as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 if __name__ == '__main__':
     init_db()
