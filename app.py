@@ -383,135 +383,104 @@ def importar_excel():
         return jsonify({'error':'Solo se aceptan archivos Excel (.xlsx)'}), 400
     try:
         import openpyxl
-        data_bytes = file.read()
-        wb = openpyxl.load_workbook(io.BytesIO(data_bytes), data_only=True)
+        wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
 
-        # Buscar la hoja correcta
+        # Buscar hoja CARGA_ACTIVOS
         ws = None
         for name in wb.sheetnames:
-            nu = name.upper()
-            if 'CARGA' in nu or ('ACTIVO' in nu and 'INSTRUC' not in nu):
+            if 'CARGA' in name.upper():
                 ws = wb[name]; break
         if ws is None:
-            ws = wb.worksheets[0] if len(wb.worksheets)==1 else (wb.worksheets[1] if len(wb.worksheets)>1 else wb.active)
+            ws = wb.worksheets[1] if len(wb.worksheets) > 1 else wb.active
 
-        # Detectar fila de encabezados (buscar en filas 1-5)
-        header_row = None
-        col_map = {}
-        BUSCAR = {
-            'tipo':['tipo'],
-            'subtipo':['subtipo'],
-            'marca':['marca'],
-            'modelo':['modelo'],
-            'serie':['serie','n serie','num'],
-            'estado':['estado'],
-            'edificio':['edificio'],
-            'sala':['sala','dependencia'],
-            'responsable':['responsable'],
-            'fecha_compra':['fecha'],
-            'precio':['precio'],
-            'documento':['documento','factura','doc'],
-            'vida_util':['vida','util'],
-            'observaciones':['observacion','obs'],
+        # Columnas fijas segun plantilla oficial (fila 3 = encabezados, datos desde fila 4)
+        # Col 1=ID(vacio), 2=Tipo, 3=Subtipo, 4=Marca, 5=Modelo, 6=Serie
+        # Col 7=Estado, 8=Edificio, 9=Sala, 10=Responsable, 11=Fecha
+        # Col 12=Precio, 13=Documento, 14=VidaUtil, 15=Observaciones
+        COL = {
+            'tipo': 2, 'subtipo': 3, 'marca': 4, 'modelo': 5,
+            'serie': 6, 'estado': 7, 'edificio': 8, 'sala': 9,
+            'responsable': 10, 'fecha': 11, 'precio': 12,
+            'documento': 13, 'vida': 14, 'obs': 15
         }
-        for fila in range(1, 6):
-            for col in range(1, ws.max_column+1):
-                v = ws.cell(row=fila, column=col).value
-                if not v: continue
-                vs = str(v).lower().replace('\n',' ').replace('*','').strip()
-                for campo, claves in BUSCAR.items():
-                    if campo not in col_map:
-                        for clave in claves:
-                            if clave in vs:
-                                col_map[campo] = col
-                                header_row = fila
-                                break
-        if not header_row:
-            return jsonify({'error':'No se encontraron encabezados en el archivo. Asegurate de usar la plantilla oficial.'}), 400
 
-        data_start = header_row + 1
-
-        def get_val(row_num, campo):
-            col = col_map.get(campo)
-            if not col: return ''
-            v = ws.cell(row=row_num, column=col).value
+        def gv(row, campo):
+            v = ws.cell(row=row, column=COL[campo]).value
             if v is None: return ''
             return str(v).strip()
 
         creados = 0
-        omitidos = 0
         errores = []
+        omitidos = 0
 
-        for row_num in range(data_start, ws.max_row + 1):
-            tipo     = get_val(row_num, 'tipo')
-            subtipo  = get_val(row_num, 'subtipo')
-            edificio = get_val(row_num, 'edificio')
+        for row_num in range(4, ws.max_row + 1):
+            tipo     = gv(row_num, 'tipo')
+            subtipo  = gv(row_num, 'subtipo')
+            edificio = gv(row_num, 'edificio')
 
             # Fila vacia
             if not tipo and not subtipo:
                 omitidos += 1
                 continue
-            # Fila de ejemplo
-            if any(x in (tipo+subtipo).lower() for x in ['ejemplo','example','muestra','test']):
-                omitidos += 1
-                continue
+
             # Faltan obligatorios
             if not tipo or not subtipo or not edificio:
-                errores.append(f"Fila {row_num}: faltan campos obligatorios (Tipo={tipo!r}, Subtipo={subtipo!r}, Edificio={edificio!r})")
+                errores.append(f"Fila {row_num}: faltan campos (Tipo={tipo!r} Subtipo={subtipo!r} Edificio={edificio!r})")
                 continue
 
             try:
-                estado = get_val(row_num, 'estado') or 'Bueno'
+                estado = gv(row_num, 'estado') or 'Bueno'
                 if estado not in ('Bueno','Regular','Malo'): estado = 'Bueno'
 
-                precio_raw = get_val(row_num, 'precio')
+                precio_raw = gv(row_num, 'precio')
                 try:
-                    precio = float(str(precio_raw).replace('.','').replace(',','.').replace('$','').strip()) if precio_raw else 0
+                    precio = float(str(precio_raw).replace('.','').replace(',','.').replace('$','')) if precio_raw else 0
                 except: precio = 0
 
-                vida_raw = get_val(row_num, 'vida_util')
+                vida_raw = gv(row_num, 'vida')
                 try: vida = int(float(vida_raw)) if vida_raw else VIDA_UTIL_SII.get(tipo, 7)
                 except: vida = VIDA_UTIL_SII.get(tipo, 7)
 
-                aid = next_id()
-                marca      = get_val(row_num,'marca')
-                modelo     = get_val(row_num,'modelo')
-                serie      = get_val(row_num,'serie')
-                sala       = get_val(row_num,'sala')
-                responsable= get_val(row_num,'responsable')
-                fecha      = get_val(row_num,'fecha_compra')
-                documento  = get_val(row_num,'documento')
-                obs        = get_val(row_num,'observaciones')
-                usuario    = session['user']
+                aid    = next_id()
+                marca  = gv(row_num, 'marca')
+                modelo = gv(row_num, 'modelo')
+                serie  = gv(row_num, 'serie')
+                sala   = gv(row_num, 'sala')
+                resp   = gv(row_num, 'responsable')
+                fecha  = gv(row_num, 'fecha')
+                doc    = gv(row_num, 'documento')
+                obs    = gv(row_num, 'obs')
+                usu    = session['user']
 
                 conn2, mode2 = get_db()
                 cur2 = conn2.cursor()
                 if mode2 == 'pg':
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha,precio,documento,vida,obs,'')
+                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,vida,obs,'')
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
-                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usuario)
+                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usu)
                     )
                 else:
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha,precio,documento,vida,obs,'')
+                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,vida,obs,'')
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usuario)
+                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usu)
                     )
                 conn2.commit()
                 conn2.close()
                 creados += 1
+
             except Exception as e:
                 errores.append(f"Fila {row_num}: {str(e)}")
 
         msg = f"{creados} activos importados"
-        if omitidos: msg += f", {omitidos} filas omitidas (vacias o ejemplos)"
+        if omitidos: msg += f", {omitidos} filas vacias omitidas"
         return jsonify({'ok':True,'creados':creados,'errores':errores,'mensaje':msg})
 
     except Exception as e:
