@@ -45,8 +45,9 @@ tr:hover td{background:#f8fafc}
 .panel-close{background:none;border:none;color:#fff;font-size:22px;cursor:pointer;line-height:1;padding:0 4px}
 .panel-body{padding:16px;flex:1}
 .tabs{display:flex;gap:4px;margin-bottom:14px;border-bottom:1px solid #eee;padding-bottom:8px}
-.tab{padding:5px 14px;border-radius:6px;font-size:12px;cursor:pointer;border:none;background:none;color:#888}
-.tab.active{background:#E6F1FB;color:#0C447C;font-weight:600}
+.tab{padding:7px 4px;border-radius:8px;font-size:11px;cursor:pointer;border:1px solid #eee;background:#f8f8f8;color:#666;text-align:center;transition:all 0.15s}
+.tab:hover{background:#f0f4f8}
+.tab.active{background:#1F3864;color:#fff;font-weight:600;border-color:#1F3864}
 .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px}
 .field-box label{font-size:10px;color:#999;text-transform:uppercase;letter-spacing:.04em;display:block;margin-bottom:3px}
 .field-box .val{font-size:14px;font-weight:600;color:#1a1a1a}
@@ -145,14 +146,15 @@ tr:hover td{background:#f8fafc}
     <button class="panel-close" onclick="cerrarPanel()">×</button>
   </div>
   <div class="panel-body">
-    <div class="tabs">
-      <button class="tab active" onclick="showTab('ficha',this)">Ficha</button>
-      <button class="tab" onclick="showTab('foto',this)">Foto</button>
-      <button class="tab" onclick="showTab('historial',this)">Historial</button>
-      <button class="tab" onclick="showTab('dep',this)">📉 Depreciación</button>
-      <button class="tab" onclick="showTab('mant',this)">🔧 Mantenciones</button>
-      <button class="tab" onclick="showTab('qr',this)">QR / Código</button>
+    <div class="tabs" style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-bottom:14px;border-bottom:none;padding-bottom:0">
+      <button class="tab active" onclick="showTab('ficha',this)" style="text-align:center;padding:7px 4px;font-size:11px">📋 Ficha</button>
+      <button class="tab" onclick="showTab('foto',this)" style="text-align:center;padding:7px 4px;font-size:11px">📷 Foto</button>
+      <button class="tab" onclick="showTab('historial',this)" style="text-align:center;padding:7px 4px;font-size:11px">📜 Historial</button>
+      <button class="tab" onclick="showTab('dep',this)" style="text-align:center;padding:7px 4px;font-size:11px">📉 Deprec.</button>
+      <button class="tab" onclick="showTab('mant',this)" style="text-align:center;padding:7px 4px;font-size:11px">🔧 Mant.</button>
+      <button class="tab" onclick="showTab('qr',this)" style="text-align:center;padding:7px 4px;font-size:11px">📱 QR</button>
     </div>
+    <div style="height:1px;background:#eee;margin-bottom:14px"></div>
 
     <div id="tab-ficha">
       <div class="field-grid">
