@@ -10,50 +10,49 @@ body{font-family:Arial,sans-serif;background:#1F3864;min-height:100vh;display:fl
 .card{background:#fff;border-radius:16px;padding:36px 28px;width:100%;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3)}
 .logo{font-size:48px;margin-bottom:12px}
 h1{font-size:18px;color:#1F3864;font-weight:700;margin-bottom:6px}
-.sub{font-size:13px;color:#888;margin-bottom:28px}
-.activo-id{display:inline-block;background:#E6F1FB;color:#1F3864;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:24px}
-.pin-label{font-size:13px;color:#555;margin-bottom:10px;text-align:left}
-.pin-input{width:100%;padding:14px;font-size:24px;text-align:center;letter-spacing:8px;border:2px solid #e0e4e9;border-radius:10px;outline:none;font-weight:700;color:#1F3864}
-.pin-input:focus{border-color:#2E74B5}
-.pin-btn{width:100%;padding:14px;background:#1F3864;color:#fff;border:none;border-radius:10px;font-size:16px;font-weight:700;cursor:pointer;margin-top:14px;transition:background 0.2s}
-.pin-btn:hover{background:#2E74B5}
+.sub{font-size:13px;color:#888;margin-bottom:20px}
+.activo-id{display:inline-block;background:#E6F1FB;color:#1F3864;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:20px}
+.pin-display{width:100%;padding:14px;font-size:28px;text-align:center;letter-spacing:10px;border:2px solid #e0e4e9;border-radius:10px;color:#1F3864;font-weight:700;background:#f8fafc;min-height:58px}
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
+.num-btn{padding:18px;font-size:20px;font-weight:700;background:#f0f4f8;border:1px solid #e0e4e9;border-radius:10px;cursor:pointer;color:#1F3864;transition:background 0.15s;-webkit-tap-highlight-color:transparent}
+.num-btn:active{background:#BDD7EE}
+.num-btn.del{font-size:16px;color:#888}
+.num-btn.ok{background:#1F3864;color:#fff;font-size:14px;font-weight:700}
+.num-btn.ok:active{background:#2E74B5}
 .error{color:#C00;font-size:13px;margin-top:12px;background:#FCEBEB;padding:8px 12px;border-radius:8px}
 .hint{font-size:11px;color:#bbb;margin-top:20px}
-/* Teclado numerico */
-.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:16px}
-.num-btn{padding:16px;font-size:20px;font-weight:700;background:#f0f4f8;border:1px solid #e0e4e9;border-radius:10px;cursor:pointer;color:#1F3864;transition:background 0.15s}
-.num-btn:active{background:#BDD7EE}
-.num-btn.del{font-size:14px;color:#888}
-.num-btn.enter{background:#1F3864;color:#fff;font-size:13px}
-.num-btn.enter:active{background:#2E74B5}
 </style>
 </head>
 <body>
 <div class="card">
   <div class="logo">🔒</div>
   <h1>Acceso requerido</h1>
-  <p class="sub">Ingresa el PIN para ver la ficha del activo</p>
+  <p class="sub">Ingresa el PIN para ver la ficha</p>
   <div class="activo-id">{{ id }}</div>
 
-  <form method="POST" id="pin-form">
-    <div class="pin-label">PIN de acceso</div>
-    <input type="password" name="pin" id="pin-display" class="pin-input"
-           maxlength="6" placeholder="••••" readonly>
-    <input type="hidden" name="pin" id="pin-hidden">
+  <div class="pin-display" id="pin-display">&#8203;</div>
 
-    {% if error %}
-    <div class="error">❌ {{ error }}</div>
-    {% endif %}
+  {% if error %}
+  <div class="error">❌ {{ error }}</div>
+  {% endif %}
 
-    <!-- Teclado numerico -->
-    <div class="numpad">
-      {% for n in ['1','2','3','4','5','6','7','8','9'] %}
-      <button type="button" class="num-btn" onclick="addDigit('{{ n }}')">{{ n }}</button>
-      {% endfor %}
-      <button type="button" class="num-btn del" onclick="delDigit()">⌫</button>
-      <button type="button" class="num-btn" onclick="addDigit('0')">0</button>
-      <button type="button" class="num-btn enter" onclick="submitPin()">OK ✓</button>
-    </div>
+  <div class="numpad">
+    <button type="button" class="num-btn" onclick="add('1')">1</button>
+    <button type="button" class="num-btn" onclick="add('2')">2</button>
+    <button type="button" class="num-btn" onclick="add('3')">3</button>
+    <button type="button" class="num-btn" onclick="add('4')">4</button>
+    <button type="button" class="num-btn" onclick="add('5')">5</button>
+    <button type="button" class="num-btn" onclick="add('6')">6</button>
+    <button type="button" class="num-btn" onclick="add('7')">7</button>
+    <button type="button" class="num-btn" onclick="add('8')">8</button>
+    <button type="button" class="num-btn" onclick="add('9')">9</button>
+    <button type="button" class="num-btn del" onclick="del()">⌫</button>
+    <button type="button" class="num-btn" onclick="add('0')">0</button>
+    <button type="button" class="num-btn ok" onclick="enviar()">OK ✓</button>
+  </div>
+
+  <form method="POST" id="frm" style="display:none">
+    <input type="text" name="pin" id="pin-val">
   </form>
 
   <div class="hint">Sistema de Activos Fijos — Colegio</div>
@@ -61,31 +60,33 @@ h1{font-size:18px;color:#1F3864;font-weight:700;margin-bottom:6px}
 
 <script>
 let pin = '';
-function addDigit(d){
-  if(pin.length >= 6) return;
+
+function add(d){
+  if(pin.length >= 8) return;
   pin += d;
-  document.getElementById('pin-display').value = '•'.repeat(pin.length);
-  document.getElementById('pin-hidden').value = pin;
-  if(pin.length >= 4) setTimeout(submitPin, 300);
+  mostrar();
 }
-function delDigit(){
-  pin = pin.slice(0,-1);
-  document.getElementById('pin-display').value = '•'.repeat(pin.length);
-  document.getElementById('pin-hidden').value = pin;
+
+function del(){
+  pin = pin.slice(0, -1);
+  mostrar();
 }
-function submitPin(){
-  if(pin.length < 4) return;
-  // Usar solo el input hidden con el valor real
-  const form = document.getElementById('pin-form');
-  // Remove the readonly display input from submission
-  document.getElementById('pin-display').removeAttribute('name');
-  form.submit();
+
+function mostrar(){
+  const el = document.getElementById('pin-display');
+  el.textContent = pin.length > 0 ? '•'.repeat(pin.length) : '';
 }
-// Soporte teclado fisico
-document.addEventListener('keydown', e=>{
-  if(e.key>='0' && e.key<='9') addDigit(e.key);
-  else if(e.key==='Backspace') delDigit();
-  else if(e.key==='Enter') submitPin();
+
+function enviar(){
+  if(pin.length === 0) return;
+  document.getElementById('pin-val').value = pin;
+  document.getElementById('frm').submit();
+}
+
+document.addEventListener('keydown', function(e){
+  if(e.key >= '0' && e.key <= '9') add(e.key);
+  else if(e.key === 'Backspace') del();
+  else if(e.key === 'Enter') enviar();
 });
 </script>
 </body>
