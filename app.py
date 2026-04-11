@@ -441,7 +441,6 @@ def importar_excel():
                 try: vida = int(float(vida_raw)) if vida_raw else VIDA_UTIL_SII.get(tipo, 7)
                 except: vida = VIDA_UTIL_SII.get(tipo, 7)
 
-                aid    = next_id()
                 marca  = gv(row_num, 'marca')
                 modelo = gv(row_num, 'modelo')
                 serie  = gv(row_num, 'serie')
@@ -452,16 +451,35 @@ def importar_excel():
                 obs    = gv(row_num, 'obs')
                 usu    = session['user']
 
+                # Generar ID con conexion separada
+                year = __import__('datetime').datetime.now().year % 100
+                conn3, mode3 = get_db()
+                cur3 = conn3.cursor()
+                if mode3 == 'pg':
+                    cur3.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+                else:
+                    cur3.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+                rows3 = cur3.fetchall()
+                conn3.close()
+                nums = []
+                for r3 in rows3:
+                    parts = (r3[0] if isinstance(r3, tuple) else list(r3.values())[0]).split('-')
+                    if len(parts)==3:
+                        try: nums.append(int(parts[2]))
+                        except: pass
+                nxt = max(nums)+1 if nums else 1000
+                aid = f"AF-{year:02d}-{nxt+creados}"
+
                 conn2, mode2 = get_db()
                 cur2 = conn2.cursor()
                 if mode2 == 'pg':
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,vida,obs,'')
+                        (str(aid),str(tipo),str(subtipo),str(marca),str(modelo),str(serie),str(estado),str(edificio),str(sala),str(resp),str(fecha),float(precio),str(doc),int(vida),str(obs),'')
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
-                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usu)
+                        (str(aid),'Alta',f'Importado Excel fila {row_num}',str(usu))
                     )
                 else:
                     cur2.execute(
@@ -470,14 +488,15 @@ def importar_excel():
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usu)
+                        (aid,'Alta',f'Importado Excel fila {row_num}',usu)
                     )
                 conn2.commit()
                 conn2.close()
                 creados += 1
 
             except Exception as e:
-                errores.append(f"Fila {row_num}: {str(e)}")
+                import traceback
+                errores.append(f"Fila {row_num}: {str(e)} | {traceback.format_exc().splitlines()[-1]}")
 
         msg = f"{creados} activos importados"
         if omitidos: msg += f", {omitidos} filas vacias omitidas"
