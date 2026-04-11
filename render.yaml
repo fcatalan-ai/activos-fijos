@@ -2,6 +2,7 @@ services:
   - type: web
     name: activos-fijos-colegio
     runtime: python
+    pythonVersion: "3.11.9"
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
     envVars:
@@ -11,3 +12,4 @@ services:
         value: admin@colegio.cl
       - key: ADMIN_PASS
         value: admin123
+
