@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Movimientos — Activos Fijos</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
+.topbar{background:#1F3864;color:#fff;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:50}
+.topbar h1{font-size:16px;font-weight:700}
+.topbar-links{display:flex;gap:14px;font-size:13px}
+.topbar-links a{color:#9BB8D8;text-decoration:none}
+.topbar-links a:hover,.topbar-links a.active{color:#fff;font-weight:600}
+.main{padding:16px;max-width:1300px;margin:0 auto}
+.header-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:10px}
+.header-row h2{font-size:18px;font-weight:700;color:#1F3864}
+.btn-primary{background:#1F3864;color:#fff;border:none;padding:9px 18px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
+.btn-primary:hover{background:#2E74B5}
+.btn-out{background:#fff;color:#1F3864;border:1px solid #1F3864;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer}
+/* TIPO TABS */
+.tipo-tabs{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.tipo-tab{padding:8px 20px;border-radius:20px;font-size:13px;font-weight:600;cursor:pointer;border:2px solid transparent;transition:all 0.15s}
+.tipo-tab-todos{background:#f0f4f8;color:#555;border-color:#ddd}
+.tipo-tab-todos.active{background:#1F3864;color:#fff;border-color:#1F3864}
+.tipo-tab-entrada{background:#E2EFDA;color:#27500A;border-color:#70AD47}
+.tipo-tab-entrada.active{background:#27500A;color:#fff}
+.tipo-tab-salida{background:#FCEBEB;color:#791F1F;border-color:#F09595}
+.tipo-tab-salida.active{background:#C00;color:#fff}
+/* FILTROS */
+.filtros{background:#fff;border-radius:10px;border:1px solid #e5e8ed;padding:14px;margin-bottom:14px}
+.filtros-row{display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end}
+.fg label{font-size:11px;color:#666;display:block;margin-bottom:3px}
+.fg input,.fg select{padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px;background:#fff;min-width:130px}
+.btn-buscar{background:#1F3864;color:#fff;border:none;padding:8px 16px;border-radius:7px;font-size:13px;cursor:pointer}
+.btn-reset{background:#fff;color:#555;border:1px solid #ddd;padding:8px 12px;border-radius:7px;font-size:13px;cursor:pointer}
+/* STATS */
+.mini-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px}
+@media(max-width:700px){.mini-stats{grid-template-columns:repeat(2,1fr)}}
+.mini-stat{background:#fff;border-radius:8px;padding:12px;text-align:center;border:1px solid #e5e8ed}
+.mini-stat-n{font-size:20px;font-weight:700}
+.mini-stat-l{font-size:11px;color:#888;margin-top:2px}
+/* TABLA */
+.table-wrap{background:#fff;border-radius:10px;border:1px solid #e5e8ed;overflow:auto}
+table{width:100%;border-collapse:collapse;font-size:13px;min-width:750px}
+th{background:#1F3864;color:#fff;padding:9px 12px;text-align:left;font-size:11px;font-weight:600}
+td{padding:9px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+tr:last-child td{border-bottom:none}
+tr:hover td{background:#f8fafc}
+.badge-e{background:#E2EFDA;color:#27500A;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-s{background:#FCEBEB;color:#791F1F;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700}
+.badge-tipo{background:#E6F1FB;color:#0C447C;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.btn-sm{padding:4px 9px;border-radius:5px;font-size:11px;cursor:pointer;border:1px solid #ddd;background:#f8f8f8;margin:0 2px}
+.btn-sm:hover{background:#e8ecf0}
+.loading{text-align:center;padding:30px;color:#999}
+.pag{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;border-top:1px solid #f0f0f0;font-size:12px;color:#888}
+.pag-btns{display:flex;gap:4px}
+.pag-btn{padding:4px 10px;border:1px solid #ddd;border-radius:5px;background:#fff;cursor:pointer;font-size:12px}
+.pag-btn.active{background:#1F3864;color:#fff;border-color:#1F3864}
+/* MODAL */
+.modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-bg.show{display:flex}
+.modal{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:480px;margin:16px;max-height:90vh;overflow-y:auto}
+.modal h3{font-size:15px;font-weight:700;margin-bottom:14px;color:#1F3864}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.form-group label{font-size:12px;color:#666;display:block;margin-bottom:3px}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px}
+.modal-btns{display:flex;gap:8px;justify-content:flex-end;margin-top:14px}
+.btn-cancel{padding:7px 16px;border-radius:7px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:13px}
+.btn-save{padding:7px 18px;border-radius:7px;border:none;background:#1F3864;color:#fff;cursor:pointer;font-size:13px}
+.guia-entrada{border-left:4px solid #27500A}
+.guia-salida{border-left:4px solid #C00}
+</style>
+</head>
+<body>
+<div class="topbar">
+  <h1>🏫 Activos Fijos — Movimientos</h1>
+  <div class="topbar-links">
+    <a href="/">Inventario</a>
+    <a href="/dashboard">📊 Dashboard</a>
+    <a href="/movimientos" class="active">📋 Movimientos</a>
+    <a href="/logout">Cerrar sesión</a>
+  </div>
+</div>
+
+<div class="main">
+  <div class="header-row">
+    <div>
+      <h2>📋 Registro de Movimientos</h2>
+      <p style="font-size:13px;color:#888;margin-top:4px">Guías de entrada y salida de activos fijos</p>
+    </div>
+    <div style="display:flex;gap:8px">
+      <button class="btn-out" onclick="window.location='/api/export/movimientos'">📥 Exportar Excel</button>
+      <button class="btn-primary" onclick="abrirNuevoMov()">+ Nuevo movimiento</button>
+    </div>
+  </div>
+
+  <!-- TABS TIPO -->
+  <div class="tipo-tabs">
+    <button class="tipo-tab tipo-tab-todos active" id="tab-todos" onclick="setTipo('')">📋 Todos</button>
+    <button class="tipo-tab tipo-tab-entrada" id="tab-entrada" onclick="setTipo('entrada')">📥 Guías de Entrada</button>
+    <button class="tipo-tab tipo-tab-salida" id="tab-salida" onclick="setTipo('salida')">📤 Guías de Salida</button>
+  </div>
+
+  <!-- FILTROS -->
+  <div class="filtros">
+    <div class="filtros-row">
+      <div class="fg"><label>Activo / ID</label><input type="text" id="f-q" placeholder="ID o nombre..."></div>
+      <div class="fg"><label>Tipo activo</label>
+        <select id="f-tipo">
+          <option value="">Todos los tipos</option>
+          <option>Equipamiento Tecnológico</option>
+          <option>Equipamiento Audiovisual</option>
+          <option>Equipamiento Deportivo</option>
+          <option>Mobiliario</option>
+          <option>Muebles y Útiles</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div class="fg"><label>Edificio</label>
+        <select id="f-ed">
+          <option value="">Todos</option>
+          <option>Básica</option><option>Media</option>
+          <option>Parvularia</option><option>Administración</option>
+        </select>
+      </div>
+      <div class="fg"><label>Desde</label><input type="date" id="f-desde"></div>
+      <div class="fg"><label>Hasta</label><input type="date" id="f-hasta"></div>
+      <div class="fg" style="display:flex;gap:6px">
+        <button class="btn-buscar" onclick="cargar()">🔍 Buscar</button>
+        <button class="btn-reset" onclick="resetFiltros()">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MINI STATS -->
+  <div class="mini-stats">
+    <div class="mini-stat"><div class="mini-stat-n" id="ms-total">—</div><div class="mini-stat-l">Total movimientos</div></div>
+    <div class="mini-stat"><div class="mini-stat-n" id="ms-entradas" style="color:#27500A">—</div><div class="mini-stat-l">Guías entrada</div></div>
+    <div class="mini-stat"><div class="mini-stat-n" id="ms-salidas" style="color:#C00">—</div><div class="mini-stat-l">Guías salida</div></div>
+    <div class="mini-stat"><div class="mini-stat-n" id="ms-export" style="font-size:13px;cursor:pointer;color:#2E74B5" onclick="exportar()">📥 Exportar</div><div class="mini-stat-l">Resultados actuales</div></div>
+  </div>
+
+  <!-- TABLA -->
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Fecha</th><th>Tipo</th><th>ID Activo</th><th>Descripción</th>
+          <th>Tipo activo</th><th>Edificio / Sala</th><th>Responsable</th>
+          <th>Usuario</th><th></th>
+        </tr>
+      </thead>
+      <tbody id="tabla-body"><tr><td colspan="9" class="loading">Cargando...</td></tr></tbody>
+    </table>
+    <div class="pag">
+      <span id="pag-info">—</span>
+      <div class="pag-btns" id="pag-btns"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL NUEVO MOVIMIENTO -->
+<div class="modal-bg" id="modal-mov">
+  <div class="modal">
+    <h3 id="mov-title">📋 Nuevo Movimiento</h3>
+    <div style="display:flex;gap:8px;margin-bottom:14px">
+      <button onclick="setTipoMov('entrada')" id="btn-tipo-e"
+        style="flex:1;padding:10px;border-radius:8px;border:2px solid #70AD47;background:#E2EFDA;color:#27500A;font-weight:700;cursor:pointer;font-size:13px">
+        📥 Guía Entrada
+      </button>
+      <button onclick="setTipoMov('salida')" id="btn-tipo-s"
+        style="flex:1;padding:10px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#555;font-weight:700;cursor:pointer;font-size:13px">
+        📤 Guía Salida
+      </button>
+    </div>
+    <input type="hidden" id="mov-tipo" value="entrada">
+    <div class="form-group" style="margin-bottom:10px">
+      <label>ID Activo *</label>
+      <input id="mov-activo-id" placeholder="Ej: AF-26-1000" oninput="buscarActivo()">
+      <div id="mov-activo-info" style="font-size:12px;color:#27500A;margin-top:4px"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha *</label><input type="date" id="mov-fecha"></div>
+      <div class="form-group"><label>Edificio destino</label>
+        <select id="mov-edificio">
+          <option value="">Sin cambio</option>
+          <option>Básica</option><option>Media</option>
+          <option>Parvularia</option><option>Administración</option>
+          <option>Baja</option><option>Reparación</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Descripción / Motivo *</label>
+      <textarea id="mov-desc" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:7px;font-size:13px;resize:vertical"
+        placeholder="Ej: Ingreso nuevo activo, Traslado por reemplazo, Baja por obsolescencia..."></textarea>
+    </div>
+    <div class="form-group" style="margin-bottom:10px">
+      <label>Responsable</label>
+      <input id="mov-resp" placeholder="Nombre del responsable">
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
+      <button class="btn-save" onclick="guardarMov()">Registrar movimiento</button>
+    </div>
+  </div>
+</div>
+
+<script>
+let tipoActual = '';
+let movimientos = [];
+let paginaActual = 1;
+const POR_PAGINA = 25;
+
+function setTipo(t){
+  tipoActual = t;
+  ['todos','entrada','salida'].forEach(x=>{
+    const btn = document.getElementById('tab-'+x);
+    btn.className = `tipo-tab tipo-tab-${x}` + (t===( x==='todos'?'':x) ? ' active' : '');
+  });
+  paginaActual=1; cargar();
+}
+
+async function cargar(){
+  const params = new URLSearchParams();
+  if(tipoActual) params.set('tipo_mov', tipoActual);
+  const q     = document.getElementById('f-q').value;
+  const tipo  = document.getElementById('f-tipo').value;
+  const ed    = document.getElementById('f-ed').value;
+  const desde = document.getElementById('f-desde').value;
+  const hasta = document.getElementById('f-hasta').value;
+  if(q)     params.set('q', q);
+  if(tipo)  params.set('tipo_activo', tipo);
+  if(ed)    params.set('edificio', ed);
+  if(desde) params.set('desde', desde);
+  if(hasta) params.set('hasta', hasta);
+
+  const r = await fetch('/api/movimientos/activos?'+params);
+  movimientos = await r.json();
+  paginaActual=1;
+  renderTabla();
+}
+
+function renderTabla(){
+  const inicio = (paginaActual-1)*POR_PAGINA;
+  const pagina = movimientos.slice(inicio, inicio+POR_PAGINA);
+  const entradas = movimientos.filter(m=>m.tipo_mov==='entrada').length;
+  const salidas  = movimientos.filter(m=>m.tipo_mov==='salida').length;
+
+  document.getElementById('ms-total').textContent    = movimientos.length;
+  document.getElementById('ms-entradas').textContent = entradas;
+  document.getElementById('ms-salidas').textContent  = salidas;
+
+  if(!pagina.length){
+    document.getElementById('tabla-body').innerHTML='<tr><td colspan="9" class="loading">No se encontraron movimientos</td></tr>';
+    document.getElementById('pag-info').textContent='Sin resultados';
+    document.getElementById('pag-btns').innerHTML='';
+    return;
+  }
+
+  document.getElementById('tabla-body').innerHTML = pagina.map(m=>`
+    <tr class="${m.tipo_mov==='entrada'?'guia-entrada':'guia-salida'}">
+      <td style="white-space:nowrap;color:#555">${m.fecha||'—'}</td>
+      <td><span class="${m.tipo_mov==='entrada'?'badge-e':'badge-s'}">${m.tipo_mov==='entrada'?'📥 ENTRADA':'📤 SALIDA'}</span></td>
+      <td style="font-weight:700;color:#1F3864">${m.activo_id}</td>
+      <td style="max-width:200px;font-size:12px">${m.descripcion||'—'}</td>
+      <td><span class="badge-tipo">${m.tipo_activo||'—'}</span></td>
+      <td style="font-size:12px">${m.edificio||'—'}</td>
+      <td style="font-size:12px">${m.responsable||'—'}</td>
+      <td style="font-size:11px;color:#aaa">${m.usuario||'—'}</td>
+      <td><button class="btn-sm" style="color:#c00" onclick="eliminarMov(${m.id})">🗑️</button></td>
+    </tr>`).join('');
+
+  const totalPags = Math.ceil(movimientos.length/POR_PAGINA);
+  document.getElementById('pag-info').textContent =
+    `${inicio+1}-${Math.min(inicio+POR_PAGINA,movimientos.length)} de ${movimientos.length}`;
+  let btns='';
+  for(let i=1;i<=totalPags;i++){
+    if(i===1||i===totalPags||Math.abs(i-paginaActual)<=2)
+      btns+=`<button class="pag-btn${i===paginaActual?' active':''}" onclick="irPag(${i})">${i}</button>`;
+    else if(Math.abs(i-paginaActual)===3) btns+='<span style="padding:4px">…</span>';
+  }
+  document.getElementById('pag-btns').innerHTML=btns;
+}
+
+function irPag(p){ paginaActual=p; renderTabla(); window.scrollTo(0,0); }
+function resetFiltros(){
+  ['f-q','f-tipo','f-ed','f-desde','f-hasta'].forEach(id=>document.getElementById(id).value='');
+  cargar();
+}
+function exportar(){ window.location='/api/export/movimientos-activos'; }
+
+// Modal nuevo movimiento
+function abrirNuevoMov(){
+  setTipoMov('entrada');
+  document.getElementById('mov-activo-id').value='';
+  document.getElementById('mov-activo-info').textContent='';
+  document.getElementById('mov-fecha').value=new Date().toISOString().split('T')[0];
+  document.getElementById('mov-desc').value='';
+  document.getElementById('mov-resp').value='';
+  document.getElementById('mov-edificio').value='';
+  document.getElementById('modal-mov').classList.add('show');
+}
+
+function setTipoMov(tipo){
+  document.getElementById('mov-tipo').value=tipo;
+  const be=document.getElementById('btn-tipo-e');
+  const bs=document.getElementById('btn-tipo-s');
+  if(tipo==='entrada'){
+    be.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #27500A;background:#27500A;color:#fff;font-weight:700;cursor:pointer;font-size:13px';
+    bs.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#555;font-weight:700;cursor:pointer;font-size:13px';
+  } else {
+    bs.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #C00;background:#C00;color:#fff;font-weight:700;cursor:pointer;font-size:13px';
+    be.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#555;font-weight:700;cursor:pointer;font-size:13px';
+  }
+}
+
+async function buscarActivo(){
+  const id=document.getElementById('mov-activo-id').value.trim().toUpperCase();
+  const el=document.getElementById('mov-activo-info');
+  if(id.length<5){el.textContent='';return;}
+  const r=await fetch('/api/activos/'+id);
+  if(r.ok){
+    const d=await r.json();
+    const a=d.activo;
+    el.textContent=`✅ ${a.subtipo} ${a.marca} ${a.modelo} — ${a.edificio||'Sin edificio'}`;
+    el.style.color='#27500A';
+    if(a.responsable) document.getElementById('mov-resp').value=a.responsable;
+  } else {
+    el.textContent='❌ Activo no encontrado';
+    el.style.color='#C00';
+  }
+}
+
+async function guardarMov(){
+  const aid=document.getElementById('mov-activo-id').value.trim().toUpperCase();
+  const desc=document.getElementById('mov-desc').value.trim();
+  if(!aid||!desc){alert('El ID del activo y la descripción son obligatorios');return;}
+  const data={
+    activo_id:  aid,
+    tipo_mov:   document.getElementById('mov-tipo').value,
+    descripcion:desc,
+    edificio:   document.getElementById('mov-edificio').value,
+    responsable:document.getElementById('mov-resp').value,
+    fecha:      document.getElementById('mov-fecha').value,
+  };
+  const r=await fetch('/api/movimientos/activos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const d=await r.json();
+  if(d.ok){cerrarModal();cargar();}
+  else alert('Error: '+d.error);
+}
+
+async function eliminarMov(id){
+  if(!confirm('¿Eliminar este movimiento?')) return;
+  await fetch('/api/movimientos/activos/'+id,{method:'DELETE'});
+  cargar();
+}
+
+function cerrarModal(){document.getElementById('modal-mov').classList.remove('show');}
+
+cargar();
+</script>
+</body>
+</html>
