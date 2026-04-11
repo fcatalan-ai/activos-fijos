@@ -21,6 +21,8 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:16
 .row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
 .field label{font-size:11px;color:#999;display:block;margin-bottom:2px}
 .field .val{font-size:14px;font-weight:600;color:#1a1a1a}
+.dep-bar{background:#ddd;border-radius:10px;height:10px;margin:8px 0;overflow:hidden}
+.dep-fill{height:100%;border-radius:10px}
 .footer{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#999;border-top:1px solid #eee}
 </style>
 </head>
@@ -62,6 +64,21 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:16
         <div class="field"><label>Vida útil</label><div class="val">{{ a.vida_util or '—' }} años</div></div>
       </div>
     </div>
+    {% if dep %}
+    <div class="section">
+      <div class="section-title">Depreciación según SII</div>
+      {% set dep_color = '#791F1F' if dep.estado_dep == 'Depreciado' else ('#C00' if dep.estado_dep == 'Crítico' else ('#ED7D31' if dep.estado_dep == 'Avanzado' else '#27500A')) %}
+      <div style="text-align:center;margin-bottom:10px">
+        <span style="font-size:16px;font-weight:700;color:{{ dep_color }}">{{ dep.estado_dep }}</span>
+        <span style="font-size:13px;color:#888;margin-left:8px">{{ dep.porcentaje_dep }}% depreciado</span>
+      </div>
+      <div class="dep-bar"><div class="dep-fill" style="width:{{ [dep.porcentaje_dep,100]|min }}%;background:{{ dep_color }}"></div></div>
+      <div class="row" style="margin-top:10px">
+        <div class="field"><label>Valor actual</label><div class="val" style="color:{{ dep_color }}">${{ "{:,.0f}".format(dep.valor_actual) }}</div></div>
+        <div class="field"><label>Término vida útil</label><div class="val">{{ dep.fecha_termino }}</div></div>
+      </div>
+    </div>
+    {% endif %}
     {% if a.observaciones %}
     <div class="section">
       <div class="section-title">Observaciones</div>
