@@ -6,7 +6,7 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
-FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
+FICHA_PIN = os.environ.get('FICHA_PIN', '7777')
 
 TIPOS = [
     'Equipamiento Tecnológico',
@@ -166,9 +166,20 @@ with app.app_context():
     except Exception as e_m:
         print(f"Migracion mantenciones: {e_m}")
 
-def next_id():
+def next_id(fecha_compra=None):
+    # Usar año de fecha de compra si viene, sino año actual
     year = datetime.now().year % 100
-    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+    if fecha_compra:
+        try:
+            for fmt in ['%d-%m-%Y','%Y-%m-%d','%d/%m/%Y']:
+                try:
+                    year = datetime.strptime(str(fecha_compra)[:10], fmt).year % 100
+                    break
+                except: pass
+        except: pass
+    # Buscar el correlativo mas alto para ESE año
+    prefix = f"AF-{year:02d}-"
+    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE ?", (f"AF-{year:02d}-%",))
     nums = []
     for r in rows:
         parts = r['id'].split('-')
@@ -300,7 +311,7 @@ def calcular_depreciacion(a):
 @admin_required
 def crear_activo():
     data = request.json
-    aid = next_id()
+    aid = next_id(data.get('fecha_compra',''))
     vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
     db_execute('''INSERT INTO activos
         (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
@@ -489,23 +500,7 @@ def importar_excel():
                 usu    = session['user']
 
                 # Generar ID con conexion separada
-                year = __import__('datetime').datetime.now().year % 100
-                conn3, mode3 = get_db()
-                cur3 = conn3.cursor()
-                if mode3 == 'pg':
-                    cur3.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
-                else:
-                    cur3.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
-                rows3 = cur3.fetchall()
-                conn3.close()
-                nums = []
-                for r3 in rows3:
-                    parts = (r3[0] if isinstance(r3, tuple) else list(r3.values())[0]).split('-')
-                    if len(parts)==3:
-                        try: nums.append(int(parts[2]))
-                        except: pass
-                nxt = max(nums)+1 if nums else 1000
-                aid = f"AF-{year:02d}-{nxt+creados}"
+                aid = next_id(fecha)
 
                 conn2, mode2 = get_db()
                 cur2 = conn2.cursor()
