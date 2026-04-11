@@ -6,7 +6,7 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
-FICHA_PIN = os.environ.get('FICHA_PIN', '7777')
+FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
 
 TIPOS = [
     'Equipamiento Tecnológico',
@@ -97,9 +97,12 @@ def init_db():
             id SERIAL PRIMARY KEY,
             nombre TEXT, email TEXT UNIQUE, password TEXT, rol TEXT DEFAULT \'consulta\'
         )''')
+        admin_email = os.environ.get('ADMIN_EMAIL','admin@colegio.cl')
+        admin_pass  = os.environ.get('ADMIN_PASS','admin123')
         cur.execute("INSERT INTO usuarios (nombre,email,password,rol) VALUES (%s,%s,%s,%s) ON CONFLICT (email) DO NOTHING",
-                    ('Administrador', os.environ.get('ADMIN_EMAIL','admin@colegio.cl'),
-                     os.environ.get('ADMIN_PASS','admin123'), 'admin'))
+                    ('Administrador', admin_email, admin_pass, 'admin'))
+        cur.execute("UPDATE usuarios SET password=%s, email=%s WHERE rol='admin'",
+                    (admin_pass, admin_email))
     else:
         cur = conn.cursor()
         cur.execute('''CREATE TABLE IF NOT EXISTS activos (
@@ -121,9 +124,12 @@ def init_db():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             nombre TEXT, email TEXT UNIQUE, password TEXT, rol TEXT DEFAULT \'consulta\'
         )''')
+        admin_email = os.environ.get('ADMIN_EMAIL','admin@colegio.cl')
+        admin_pass  = os.environ.get('ADMIN_PASS','admin123')
         cur.execute("INSERT OR IGNORE INTO usuarios (nombre,email,password,rol) VALUES (?,?,?,?)",
-                    ('Administrador', os.environ.get('ADMIN_EMAIL','admin@colegio.cl'),
-                     os.environ.get('ADMIN_PASS','admin123'), 'admin'))
+                    ('Administrador', admin_email, admin_pass, 'admin'))
+        cur.execute("UPDATE usuarios SET password=?, email=? WHERE rol='admin'",
+                    (admin_pass, admin_email))
     conn.commit()
     conn.close()
 
