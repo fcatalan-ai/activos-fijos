@@ -474,22 +474,38 @@ def importar_excel():
                 except: vida = VIDA_UTIL_SII.get(tipo, 7)
 
                 aid = next_id()
-                vals_activo = (
-                    aid, tipo, subtipo,
-                    get_val(row_num,'marca'), get_val(row_num,'modelo'),
-                    get_val(row_num,'serie'), estado, edificio,
-                    get_val(row_num,'sala'), get_val(row_num,'responsable'),
-                    get_val(row_num,'fecha_compra'), precio,
-                    get_val(row_num,'documento'), vida,
-                    get_val(row_num,'observaciones'), ''
-                )
-                sql_activo = ('INSERT INTO activos '
-                    '(id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,'
-                    'responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) '
-                    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
-                db_execute(sql_activo, vals_activo)
-                vals_mov = (aid, 'Alta', f'Importado desde Excel fila {row_num}', session['user'])
-                db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)", vals_mov)
+                marca      = get_val(row_num,'marca')
+                modelo     = get_val(row_num,'modelo')
+                serie      = get_val(row_num,'serie')
+                sala       = get_val(row_num,'sala')
+                responsable= get_val(row_num,'responsable')
+                fecha      = get_val(row_num,'fecha_compra')
+                documento  = get_val(row_num,'documento')
+                obs        = get_val(row_num,'observaciones')
+                usuario    = session['user']
+
+                conn2, mode2 = get_db()
+                cur2 = conn2.cursor()
+                if mode2 == 'pg':
+                    cur2.execute(
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha,precio,documento,vida,obs,'')
+                    )
+                    cur2.execute(
+                        "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
+                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usuario)
+                    )
+                else:
+                    cur2.execute(
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha,precio,documento,vida,obs,'')
+                    )
+                    cur2.execute(
+                        "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                        (aid,'Alta',f'Importado desde Excel fila {row_num}',usuario)
+                    )
+                conn2.commit()
+                conn2.close()
                 creados += 1
             except Exception as e:
                 errores.append(f"Fila {row_num}: {str(e)}")
