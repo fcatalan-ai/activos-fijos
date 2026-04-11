@@ -2,57 +2,86 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
-<title>Acceso — Activo {{ id }}</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Acceso — {{ id }}</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;background:#1F3864;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
-.card{background:#fff;border-radius:16px;padding:36px 28px;width:100%;max-width:340px;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,0.3)}
-.logo{font-size:48px;margin-bottom:12px}
-h1{font-size:18px;color:#1F3864;font-weight:700;margin-bottom:6px}
-.sub{font-size:13px;color:#888;margin-bottom:20px}
-.activo-id{display:inline-block;background:#E6F1FB;color:#1F3864;padding:4px 14px;border-radius:20px;font-size:12px;font-weight:700;margin-bottom:20px}
-.pin-display{width:100%;padding:14px;font-size:28px;text-align:center;letter-spacing:10px;border:2px solid #e0e4e9;border-radius:10px;color:#1F3864;font-weight:700;background:#f8fafc;min-height:58px}
-.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:14px}
-.num-btn{padding:18px;font-size:20px;font-weight:700;background:#f0f4f8;border:1px solid #e0e4e9;border-radius:10px;cursor:pointer;color:#1F3864;transition:background 0.15s;-webkit-tap-highlight-color:transparent}
-.num-btn:active{background:#BDD7EE}
-.num-btn.del{font-size:16px;color:#888}
-.num-btn.ok{background:#1F3864;color:#fff;font-size:14px;font-weight:700}
-.num-btn.ok:active{background:#2E74B5}
-.error{color:#C00;font-size:13px;margin-top:12px;background:#FCEBEB;padding:8px 12px;border-radius:8px}
-.hint{font-size:11px;color:#bbb;margin-top:20px}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overflow:hidden}
+body{font-family:Arial,sans-serif;background:linear-gradient(135deg,#0D4F3C 0%,#1a6b52 50%,#0D4F3C 100%);display:flex;align-items:center;justify-content:center;min-height:100vh;padding:16px}
+.card{background:#fff;border-radius:24px;width:100%;max-width:360px;padding:28px 24px 24px;box-shadow:0 20px 60px rgba(0,0,0,0.3)}
+.header{text-align:center;margin-bottom:20px}
+.lock-icon{width:64px;height:64px;background:#E2EFDA;border-radius:50%;display:flex;align-items:center;justify-content:center;margin:0 auto 12px;font-size:28px}
+.header h1{font-size:18px;font-weight:700;color:#0D4F3C;margin-bottom:4px}
+.header p{font-size:13px;color:#888}
+.activo-badge{display:inline-block;background:#E2EFDA;color:#0D4F3C;padding:5px 14px;border-radius:20px;font-size:13px;font-weight:700;margin-top:8px}
+/* DISPLAY PIN */
+.pin-display{display:flex;justify-content:center;gap:12px;margin:20px 0 16px}
+.pin-dot{width:18px;height:18px;border-radius:50%;border:2.5px solid #ccc;transition:all 0.15s}
+.pin-dot.filled{background:#0D4F3C;border-color:#0D4F3C;transform:scale(1.1)}
+/* ERROR */
+.error-msg{background:#FCEBEB;color:#C00;font-size:13px;font-weight:600;text-align:center;padding:8px 12px;border-radius:8px;margin-bottom:14px}
+/* TECLADO */
+.numpad{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+.key{height:64px;border-radius:14px;border:none;font-size:24px;font-weight:700;cursor:pointer;transition:transform 0.1s,background 0.1s;user-select:none;-webkit-user-select:none;touch-action:manipulation;display:flex;align-items:center;justify-content:center}
+.key-num{background:#f0f4f8;color:#1a1a1a}
+.key-num:active{background:#d0dce8;transform:scale(0.94)}
+.key-del{background:#FFF0F0;color:#C00;font-size:20px}
+.key-del:active{background:#ffd0d0;transform:scale(0.94)}
+.key-ok{background:#0D4F3C;color:#fff;font-size:16px;font-weight:700;letter-spacing:1px}
+.key-ok:active{background:#1a6b52;transform:scale(0.94)}
+.key-ok:disabled{background:#ccc;cursor:not-allowed}
+.key-empty{background:transparent;cursor:default}
+/* SHAKE ANIMATION */
+@keyframes shake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
+.shake{animation:shake 0.4s ease}
+.hint{text-align:center;font-size:11px;color:#bbb;margin-top:16px}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="logo">🔒</div>
-  <h1>Acceso requerido</h1>
-  <p class="sub">Ingresa el PIN para ver la ficha</p>
-  <div class="activo-id">{{ id }}</div>
-
-  <div class="pin-display" id="pin-display">&#8203;</div>
-
-  {% if error %}
-  <div class="error">❌ {{ error }}</div>
-  {% endif %}
-
-  <div class="numpad">
-    <button type="button" class="num-btn" onclick="add('1')">1</button>
-    <button type="button" class="num-btn" onclick="add('2')">2</button>
-    <button type="button" class="num-btn" onclick="add('3')">3</button>
-    <button type="button" class="num-btn" onclick="add('4')">4</button>
-    <button type="button" class="num-btn" onclick="add('5')">5</button>
-    <button type="button" class="num-btn" onclick="add('6')">6</button>
-    <button type="button" class="num-btn" onclick="add('7')">7</button>
-    <button type="button" class="num-btn" onclick="add('8')">8</button>
-    <button type="button" class="num-btn" onclick="add('9')">9</button>
-    <button type="button" class="num-btn del" onclick="del()">⌫</button>
-    <button type="button" class="num-btn" onclick="add('0')">0</button>
-    <button type="button" class="num-btn ok" onclick="enviar()">OK ✓</button>
+<div class="card" id="card">
+  <div class="header">
+    <div class="lock-icon">🔒</div>
+    <h1>Acceso requerido</h1>
+    <p>Ingresa el PIN para ver la ficha</p>
+    <div class="activo-badge">{{ id }}</div>
   </div>
 
-  <form method="POST" id="frm" style="display:none">
-    <input type="text" name="pin" id="pin-val">
+  {% if error %}
+  <div class="error-msg" id="error-box">❌ {{ error }}</div>
+  {% endif %}
+
+  <!-- Puntos indicadores -->
+  <div class="pin-display" id="pin-dots">
+    <div class="pin-dot" id="dot-0"></div>
+    <div class="pin-dot" id="dot-1"></div>
+    <div class="pin-dot" id="dot-2"></div>
+    <div class="pin-dot" id="dot-3"></div>
+  </div>
+
+  <!-- Teclado numérico -->
+  <div class="numpad">
+    <button class="key key-num" ontouchstart="" onclick="add('1')">1</button>
+    <button class="key key-num" ontouchstart="" onclick="add('2')">2</button>
+    <button class="key key-num" ontouchstart="" onclick="add('3')">3</button>
+    <button class="key key-num" ontouchstart="" onclick="add('4')">4</button>
+    <button class="key key-num" ontouchstart="" onclick="add('5')">5</button>
+    <button class="key key-num" ontouchstart="" onclick="add('6')">6</button>
+    <button class="key key-num" ontouchstart="" onclick="add('7')">7</button>
+    <button class="key key-num" ontouchstart="" onclick="add('8')">8</button>
+    <button class="key key-num" ontouchstart="" onclick="add('9')">9</button>
+    <div class="key key-empty"></div>
+    <button class="key key-num" ontouchstart="" onclick="add('0')">0</button>
+    <button class="key key-del" ontouchstart="" onclick="del()">⌫</button>
+  </div>
+
+  <!-- Botón OK separado -->
+  <form method="POST" id="frm" style="margin-top:12px">
+    <input type="hidden" name="pin" id="pin-val">
+    <button type="button" class="key key-ok" id="btn-ok"
+            style="width:100%;height:56px;border-radius:14px;font-size:18px"
+            ontouchstart="" onclick="enviar()" disabled>
+      ✓ &nbsp;Ingresar
+    </button>
   </form>
 
   <div class="hint">Sistema de Activos Fijos — Colegio</div>
@@ -60,34 +89,50 @@ h1{font-size:18px;color:#1F3864;font-weight:700;margin-bottom:6px}
 
 <script>
 let pin = '';
+const MAX = 6;
+
+function updateDots(){
+  for(let i=0;i<4;i++){
+    const dot = document.getElementById('dot-'+i);
+    dot.className = 'pin-dot' + (i < pin.length ? ' filled' : '');
+  }
+  document.getElementById('btn-ok').disabled = pin.length < 4;
+}
 
 function add(d){
-  if(pin.length >= 8) return;
+  if(pin.length >= MAX) return;
   pin += d;
-  mostrar();
+  document.getElementById('pin-val').value = pin;
+  updateDots();
+  // Auto enviar si llega a 4 dígitos (longitud del PIN por defecto)
+  if(pin.length === 4){
+    setTimeout(()=>{ if(pin.length===4) enviar(); }, 300);
+  }
 }
 
 function del(){
-  pin = pin.slice(0, -1);
-  mostrar();
-}
-
-function mostrar(){
-  const el = document.getElementById('pin-display');
-  el.textContent = pin.length > 0 ? '•'.repeat(pin.length) : '';
+  if(!pin.length) return;
+  pin = pin.slice(0,-1);
+  document.getElementById('pin-val').value = pin;
+  updateDots();
 }
 
 function enviar(){
-  if(pin.length === 0) return;
-  document.getElementById('pin-val').value = pin;
+  if(pin.length < 4) return;
   document.getElementById('frm').submit();
 }
 
-document.addEventListener('keydown', function(e){
-  if(e.key >= '0' && e.key <= '9') add(e.key);
-  else if(e.key === 'Backspace') del();
-  else if(e.key === 'Enter') enviar();
+// Teclado físico
+document.addEventListener('keydown', e=>{
+  if(e.key>='0'&&e.key<='9') add(e.key);
+  else if(e.key==='Backspace') del();
+  else if(e.key==='Enter') enviar();
 });
+
+// Si hay error, animar la card
+{% if error %}
+document.getElementById('card').classList.add('shake');
+{% endif %}
 </script>
 </body>
 </html>
