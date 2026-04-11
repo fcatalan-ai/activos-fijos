@@ -335,6 +335,44 @@ def subir_foto(id):
                (id,'Foto','Foto del activo actualizada',session['user']))
     return jsonify({'ok':True,'foto':b64})
 
+
+@app.route('/api/debug-excel', methods=['POST'])
+@admin_required
+def debug_excel():
+    if 'archivo' not in request.files:
+        return jsonify({'error':'No archivo'}), 400
+    file = request.files['archivo']
+    try:
+        import openpyxl
+        wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
+        hojas = wb.sheetnames
+        ws = None
+        for name in wb.sheetnames:
+            nu = name.upper()
+            if 'CARGA' in nu or ('ACTIVO' in nu and 'INSTRUC' not in nu):
+                ws = wb[name]; break
+        if ws is None:
+            ws = wb.worksheets[1] if len(wb.worksheets) > 1 else wb.active
+        
+        # Leer primeras 6 filas para debug
+        preview = []
+        for row in range(1, 7):
+            fila = []
+            for col in range(1, min(ws.max_column+1, 16)):
+                v = ws.cell(row=row, column=col).value
+                fila.append(str(v) if v is not None else '')
+            preview.append(fila)
+        
+        return jsonify({
+            'hojas': hojas,
+            'hoja_usada': ws.title,
+            'max_row': ws.max_row,
+            'max_col': ws.max_column,
+            'preview_filas_1_6': preview
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/api/importar', methods=['POST'])
 @admin_required
 def importar_excel():
@@ -436,21 +474,22 @@ def importar_excel():
                 except: vida = VIDA_UTIL_SII.get(tipo, 7)
 
                 aid = next_id()
-                db_execute(
-                    '''INSERT INTO activos
-                    (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,
-                     responsable,fecha_compra,precio,documento,vida_util,observaciones,foto)
-                    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-                    (aid, tipo, subtipo,
-                     get_val(row_num,'marca'), get_val(row_num,'modelo'),
-                     get_val(row_num,'serie'), estado, edificio,
-                     get_val(row_num,'sala'), get_val(row_num,'responsable'),
-                     get_val(row_num,'fecha_compra'), precio,
-                     get_val(row_num,'documento'), vida,
-                     get_val(row_num,'observaciones'), ''))
-                db_execute(
-                    "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                    (aid,'Alta',f'Importado desde Excel — fila {row_num}',session['user']))
+                vals_activo = (
+                    aid, tipo, subtipo,
+                    get_val(row_num,'marca'), get_val(row_num,'modelo'),
+                    get_val(row_num,'serie'), estado, edificio,
+                    get_val(row_num,'sala'), get_val(row_num,'responsable'),
+                    get_val(row_num,'fecha_compra'), precio,
+                    get_val(row_num,'documento'), vida,
+                    get_val(row_num,'observaciones'), ''
+                )
+                sql_activo = ('INSERT INTO activos '
+                    '(id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,'
+                    'responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) '
+                    'VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)')
+                db_execute(sql_activo, vals_activo)
+                vals_mov = (aid, 'Alta', f'Importado desde Excel fila {row_num}', session['user'])
+                db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)", vals_mov)
                 creados += 1
             except Exception as e:
                 errores.append(f"Fila {row_num}: {str(e)}")
