@@ -140,6 +140,17 @@ with app.app_context():
         conn_m, mode_m = get_db()
         cur_m = conn_m.cursor()
         if mode_m == 'pg':
+            cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
+                id SERIAL PRIMARY KEY,
+                activo_id TEXT NOT NULL,
+                tipo TEXT DEFAULT 'entrada',
+                descripcion TEXT,
+                edificio TEXT,
+                responsable TEXT,
+                usuario TEXT,
+                fecha TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
             cur_m.execute('''CREATE TABLE IF NOT EXISTS mantenciones (
                 id SERIAL PRIMARY KEY,
                 activo_id TEXT NOT NULL,
@@ -154,6 +165,17 @@ with app.app_context():
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
         else:
+            cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activo_id TEXT NOT NULL,
+                tipo TEXT DEFAULT 'entrada',
+                descripcion TEXT,
+                edificio TEXT,
+                responsable TEXT,
+                usuario TEXT,
+                fecha TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )''')
             cur_m.execute('''CREATE TABLE IF NOT EXISTS mantenciones (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 activo_id TEXT NOT NULL,
@@ -697,18 +719,20 @@ def dashboard():
 @app.route('/api/kpis')
 @login_required
 def get_kpis():
-    # Activos por estado
-    por_estado = db_fetchall(
-        "SELECT estado, COUNT(*) as n FROM activos GROUP BY estado")
-    # Activos por tipo
-    por_tipo = db_fetchall(
-        "SELECT tipo, COUNT(*) as n FROM activos GROUP BY tipo ORDER BY n DESC")
-    # Activos por edificio
-    por_edificio = db_fetchall(
-        "SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio ORDER BY n DESC")
-    # Valor total e inventario
-    totales = db_fetchone(
-        "SELECT COUNT(*) as total, COALESCE(SUM(precio),0) as valor FROM activos")
+    tipo     = request.args.get('tipo','')
+    subtipo  = request.args.get('subtipo','')
+    edificio = request.args.get('edificio','')
+
+    filtro = " WHERE 1=1"
+    params = []
+    if tipo:     filtro += " AND tipo=?";     params.append(tipo)
+    if subtipo:  filtro += " AND subtipo LIKE ?"; params.append(f'%{subtipo}%')
+    if edificio: filtro += " AND edificio=?"; params.append(edificio)
+
+    por_estado = db_fetchall(f"SELECT estado, COUNT(*) as n FROM activos{filtro} GROUP BY estado", params)
+    por_tipo   = db_fetchall(f"SELECT tipo, COUNT(*) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
+    por_edificio=db_fetchall(f"SELECT edificio, COUNT(*) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
+    totales    = db_fetchone(f"SELECT COUNT(*) as total, COALESCE(SUM(precio),0) as valor FROM activos{filtro}", params)
     # Costo total mantenciones
     costo_mant = db_fetchone(
         "SELECT COALESCE(SUM(costo),0) as total FROM mantenciones")
@@ -786,19 +810,130 @@ def get_kpis():
 @app.route('/api/kpis/subtipo')
 @login_required
 def kpis_subtipo():
+    tipo     = request.args.get('tipo','')
+    subtipo  = request.args.get('subtipo','')
+    edificio = request.args.get('edificio','')
+    filtro = " WHERE subtipo IS NOT NULL AND subtipo != ''"
+    params = []
+    if tipo:     filtro += " AND tipo=?";         params.append(tipo)
+    if subtipo:  filtro += " AND subtipo LIKE ?";  params.append(f'%{subtipo}%')
+    if edificio: filtro += " AND edificio=?";      params.append(edificio)
+
     por_subtipo = db_fetchall(
-        """SELECT subtipo, COUNT(*) as n FROM activos
-           WHERE subtipo IS NOT NULL AND subtipo != ''
-           GROUP BY subtipo ORDER BY n DESC""")
+        f"SELECT subtipo, COUNT(*) as n FROM activos{filtro} GROUP BY subtipo ORDER BY n DESC", params)
+    filtro_ed = filtro + " AND edificio IS NOT NULL AND edificio != ''"
     por_subtipo_edificio = db_fetchall(
-        """SELECT subtipo, edificio, COUNT(*) as n FROM activos
-           WHERE subtipo IS NOT NULL AND subtipo != ''
-             AND edificio IS NOT NULL AND edificio != ''
-           GROUP BY subtipo, edificio ORDER BY subtipo, n DESC""")
+        f"SELECT subtipo, edificio, COUNT(*) as n FROM activos{filtro_ed} GROUP BY subtipo, edificio ORDER BY subtipo, n DESC", params)
     return jsonify({
         'por_subtipo': por_subtipo,
         'por_subtipo_edificio': por_subtipo_edificio
     })
+
+
+# ── MOVIMIENTOS DE ACTIVOS ────────────────────────────────────────────────────
+
+@app.route('/movimientos')
+@login_required
+def movimientos_page():
+    return render_template('movimientos.html', user=session['user'], rol=session['rol'])
+
+@app.route('/api/movimientos/activos', methods=['GET'])
+@login_required
+def get_movimientos_activos():
+    tipo_mov  = request.args.get('tipo_mov','')
+    q         = request.args.get('q','')
+    tipo_activo = request.args.get('tipo_activo','')
+    edificio  = request.args.get('edificio','')
+    desde     = request.args.get('desde','')
+    hasta     = request.args.get('hasta','')
+
+    sql = """SELECT m.id, m.activo_id, m.tipo as tipo_mov, m.descripcion,
+                    m.usuario, m.fecha, m.responsable, m.edificio,
+                    a.tipo as tipo_activo, a.subtipo, a.marca, a.modelo
+             FROM movimientos_activos m
+             LEFT JOIN activos a ON m.activo_id=a.id
+             WHERE 1=1"""
+    params = []
+    if tipo_mov:     sql += " AND m.tipo=?";           params.append(tipo_mov)
+    if q:            sql += " AND (m.activo_id LIKE ? OR a.subtipo LIKE ? OR a.marca LIKE ?)"; params+=[f'%{q}%']*3
+    if tipo_activo:  sql += " AND a.tipo=?";           params.append(tipo_activo)
+    if edificio:     sql += " AND m.edificio=?";       params.append(edificio)
+    if desde:
+        p=desde.split('-'); desde_fmt=f"{p[2]}-{p[1]}-{p[0]}" if len(p)==3 else desde
+        sql += " AND m.fecha >= ?"; params.append(desde_fmt)
+    if hasta:
+        p=hasta.split('-'); hasta_fmt=f"{p[2]}-{p[1]}-{p[0]}" if len(p)==3 else hasta
+        sql += " AND m.fecha <= ?"; params.append(hasta_fmt)
+    sql += " ORDER BY m.created_at DESC LIMIT 500"
+    return jsonify(db_fetchall(sql, params))
+
+@app.route('/api/movimientos/activos', methods=['POST'])
+@login_required
+def crear_movimiento_activo():
+    d = request.json
+    aid = d.get('activo_id','').strip().upper()
+    if not aid: return jsonify({'error':'ID activo requerido'}), 400
+    a = db_fetchone("SELECT * FROM activos WHERE id=?", (aid,))
+    if not a: return jsonify({'error':f'Activo {aid} no encontrado'}), 404
+
+    fecha = d.get('fecha', datetime.now().strftime('%d-%m-%Y'))
+    if fecha and '-' in fecha:
+        parts = fecha.split('-')
+        if len(parts[0])==4:
+            fecha = f"{parts[2]}-{parts[1]}-{parts[0]}"
+
+    conn2, mode2 = get_db()
+    cur2 = conn2.cursor()
+    if mode2 == 'pg':
+        cur2.execute(
+            """INSERT INTO movimientos_activos
+               (activo_id,tipo,descripcion,edificio,responsable,usuario,fecha)
+               VALUES (%s,%s,%s,%s,%s,%s,%s)""",
+            (aid, d.get('tipo_mov','entrada'), d.get('descripcion',''),
+             d.get('edificio',''), d.get('responsable',''),
+             session['user'], fecha))
+    else:
+        cur2.execute(
+            """INSERT INTO movimientos_activos
+               (activo_id,tipo,descripcion,edificio,responsable,usuario,fecha)
+               VALUES (?,?,?,?,?,?,?)""",
+            (aid, d.get('tipo_mov','entrada'), d.get('descripcion',''),
+             d.get('edificio',''), d.get('responsable',''),
+             session['user'], fecha))
+    conn2.commit(); conn2.close()
+    return jsonify({'ok':True})
+
+@app.route('/api/movimientos/activos/<int:mid>', methods=['DELETE'])
+@login_required
+def eliminar_movimiento_activo(mid):
+    db_execute("DELETE FROM movimientos_activos WHERE id=?", (mid,))
+    return jsonify({'ok':True})
+
+@app.route('/api/export/movimientos-activos')
+@login_required
+def export_movimientos_activos():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    rows = db_fetchall(
+        """SELECT m.fecha, m.tipo, m.activo_id, m.descripcion,
+                  a.tipo as tipo_activo, a.subtipo, a.marca, a.modelo,
+                  m.edificio, m.responsable, m.usuario
+           FROM movimientos_activos m LEFT JOIN activos a ON m.activo_id=a.id
+           ORDER BY m.created_at DESC""")
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title="Movimientos Activos"
+    headers=['Fecha','Tipo','ID Activo','Descripción','Tipo Activo','Subtipo','Marca','Modelo','Edificio','Responsable','Usuario']
+    for col,h in enumerate(headers,1):
+        cell=ws.cell(row=1,column=col,value=h)
+        cell.font=Font(bold=True,color='FFFFFF')
+        cell.fill=PatternFill('solid',start_color='1F3864',fgColor='1F3864')
+        cell.alignment=Alignment(horizontal='center')
+        ws.column_dimensions[ws.cell(row=1,column=col).column_letter].width=18
+    for ri,r in enumerate(rows,2):
+        for col,key in enumerate(['fecha','tipo','activo_id','descripcion','tipo_activo','subtipo','marca','modelo','edificio','responsable','usuario'],1):
+            ws.cell(row=ri,column=col,value=r.get(key,''))
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf,download_name='movimientos_activos.xlsx',as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 if __name__=='__main__':
     init_db()
