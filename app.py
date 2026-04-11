@@ -900,13 +900,30 @@ def crear_movimiento_activo():
             (aid, d.get('tipo_mov','entrada'), d.get('descripcion',''),
              d.get('edificio',''), d.get('responsable',''),
              session['user'], fecha))
+    # Si es salida, cambiar estado del activo a "De Baja"
+    if d.get('tipo_mov') == 'salida':
+        if mode2 == 'pg':
+            cur2.execute("UPDATE activos SET estado='De Baja' WHERE id=%s", (aid,))
+        else:
+            cur2.execute("UPDATE activos SET estado='De Baja' WHERE id=?", (aid,))
+
     conn2.commit(); conn2.close()
     return jsonify({'ok':True})
 
 @app.route('/api/movimientos/activos/<int:mid>', methods=['DELETE'])
 @login_required
 def eliminar_movimiento_activo(mid):
+    # Obtener el movimiento antes de borrar
+    mov = db_fetchone("SELECT * FROM movimientos_activos WHERE id=?", (mid,))
     db_execute("DELETE FROM movimientos_activos WHERE id=?", (mid,))
+    # Si era salida y no hay otras guías de salida para ese activo, revertir estado
+    if mov and mov.get('tipo') == 'salida':
+        otras = db_fetchall(
+            "SELECT id FROM movimientos_activos WHERE activo_id=? AND tipo='salida'",
+            (mov['activo_id'],))
+        if not otras:
+            db_execute("UPDATE activos SET estado='Bueno' WHERE id=? AND estado='De Baja'",
+                      (mov['activo_id'],))
     return jsonify({'ok':True})
 
 @app.route('/api/export/movimientos-activos')
