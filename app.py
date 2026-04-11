@@ -7,6 +7,15 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DB = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'activos.db')
 
+TIPOS = [
+    'Equipamiento Tecnológico',
+    'Equipamiento Audiovisual',
+    'Equipamiento Deportivo',
+    'Mobiliario',
+    'Muebles y Útiles',
+    'Otro',
+]
+
 def get_db():
     conn = sqlite3.connect(DB)
     conn.row_factory = sqlite3.Row
@@ -23,6 +32,11 @@ def init_db():
         observaciones TEXT, foto TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
     )''')
+    # Agregar columna foto si no existe (migracion)
+    try:
+        c.execute("ALTER TABLE activos ADD COLUMN foto TEXT")
+    except Exception:
+        pass
     c.execute('''CREATE TABLE IF NOT EXISTS movimientos (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         activo_id TEXT, tipo TEXT, descripcion TEXT,
@@ -40,7 +54,6 @@ def init_db():
     conn.commit()
     conn.close()
 
-# Llamar init_db al cargar el módulo
 with app.app_context():
     init_db()
 
@@ -101,7 +114,7 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    return render_template('index.html', user=session['user'], rol=session['rol'])
+    return render_template('index.html', user=session['user'], rol=session['rol'], tipos=TIPOS)
 
 @app.route('/api/activos', methods=['GET'])
 @login_required
@@ -143,13 +156,13 @@ def crear_activo():
     conn = get_db()
     conn.execute('''INSERT INTO activos
         (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-         fecha_compra,precio,documento,vida_util,observaciones)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+         fecha_compra,precio,documento,vida_util,observaciones,foto)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
         (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
          data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
          data.get('edificio'), data.get('sala'), data.get('responsable'),
          data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-         data.get('vida_util',4), data.get('observaciones','')))
+         data.get('vida_util',4), data.get('observaciones',''), data.get('foto','')))
     conn.execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                  (aid, 'Alta', 'Activo registrado en el sistema', session['user']))
     conn.commit()
@@ -164,7 +177,7 @@ def editar_activo(id):
     old = conn.execute("SELECT * FROM activos WHERE id=?", (id,)).fetchone()
     if not old: return jsonify({'error':'No encontrado'}), 404
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto']
     sets = ', '.join(f"{c}=?" for c in campos if c in data)
     vals = [data[c] for c in campos if c in data]
     if sets:
@@ -195,62 +208,29 @@ def traslado(id):
     conn.close()
     return jsonify({'ok': True})
 
-def make_simple_qr_png(text):
-    """Genera un PNG minimalista con patrón basado en el texto (sin librería externa)."""
-    size = 21
-    cell = 10
-    img_size = size * cell + 20
-    # Patrón determinista basado en el texto
-    seed = sum(ord(c) * (i+1) for i, c in enumerate(text))
-    def is_dark(r, c):
-        # Finder patterns
-        if (r < 7 and c < 7) or (r < 7 and c >= size-7) or (r >= size-7 and c < 7):
-            if r == 0 or r == 6 or c == 0 or c == 6: return True
-            if 2 <= r <= 4 and 2 <= c <= 4: return True
-            return False
-        return (seed * (r+1) * (c+1) + r * 3 + c * 7) % 4 != 0
-
-    # Crear imagen PNG raw
-    pixels = []
-    pad = 10
-    w = img_size
-    h = img_size
-    rgba = []
-    for y in range(h):
-        for x in range(w):
-            rx = x - pad
-            ry = y - pad
-            r_cell = ry // cell
-            c_cell = rx // cell
-            if 0 <= r_cell < size and 0 <= c_cell < size and is_dark(r_cell, c_cell):
-                rgba += [0, 0, 0, 255]
-            else:
-                rgba += [255, 255, 255, 255]
-
-    def png_chunk(name, data):
-        c = zlib.crc32(name + data) & 0xffffffff
-        return struct.pack('>I', len(data)) + name + data + struct.pack('>I', c)
-
-    raw_rows = b''
-    for y in range(h):
-        row = bytes([0])  # filter type
-        for x in range(w):
-            idx = (y * w + x) * 4
-            row += bytes(rgba[idx:idx+4])
-        raw_rows += row
-
-    compressed = zlib.compress(raw_rows, 9)
-    png = (b'\x89PNG\r\n\x1a\n' +
-           png_chunk(b'IHDR', struct.pack('>IIBBBBB', w, h, 8, 2, 0, 0, 0)[:13]) +
-           png_chunk(b'IDAT', compressed) +
-           png_chunk(b'IEND', b''))
-    # Fix IHDR
-    ihdr_data = struct.pack('>II', w, h) + bytes([8, 2, 0, 0, 0])
-    png = (b'\x89PNG\r\n\x1a\n' +
-           png_chunk(b'IHDR', ihdr_data) +
-           png_chunk(b'IDAT', compressed) +
-           png_chunk(b'IEND', b''))
-    return png
+@app.route('/api/activos/<id>/foto', methods=['POST'])
+@admin_required
+def subir_foto(id):
+    if 'foto' not in request.files:
+        return jsonify({'error': 'No se envió archivo'}), 400
+    file = request.files['foto']
+    if file.filename == '':
+        return jsonify({'error': 'Archivo vacío'}), 400
+    allowed = {'jpg','jpeg','png','gif','webp'}
+    ext = file.filename.rsplit('.', 1)[-1].lower()
+    if ext not in allowed:
+        return jsonify({'error': 'Formato no permitido'}), 400
+    data = file.read()
+    if len(data) > 5 * 1024 * 1024:
+        return jsonify({'error': 'Imagen muy grande (máx 5MB)'}), 400
+    b64 = f"data:image/{ext};base64," + base64.b64encode(data).decode()
+    conn = get_db()
+    conn.execute("UPDATE activos SET foto=? WHERE id=?", (b64, id))
+    conn.execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                 (id, 'Foto', 'Foto del activo actualizada', session['user']))
+    conn.commit()
+    conn.close()
+    return jsonify({'ok': True, 'foto': b64})
 
 @app.route('/api/activos/<id>/qr')
 @login_required
@@ -263,9 +243,35 @@ def get_qr(id):
         img.save(buf, format='PNG')
         b64 = base64.b64encode(buf.getvalue()).decode()
     except Exception:
-        png = make_simple_qr_png(id)
-        b64 = base64.b64encode(png).decode()
+        b64 = _simple_qr_b64(id)
     return jsonify({'qr': b64, 'url': url})
+
+def _simple_qr_b64(text):
+    size, cell = 21, 10
+    img_size = size * cell + 20
+    seed = sum(ord(c)*(i+1) for i,c in enumerate(text))
+    def dark(r,c):
+        if (r<7 and c<7) or (r<7 and c>=size-7) or (r>=size-7 and c<7):
+            if r==0 or r==6 or c==0 or c==6: return True
+            if 2<=r<=4 and 2<=c<=4: return True
+            return False
+        return (seed*(r+1)*(c+1)+r*3+c*7)%4!=0
+    w=h=img_size; pad=10; rgba=[]
+    for y in range(h):
+        for x in range(w):
+            rc,cc = (y-pad)//cell, (x-pad)//cell
+            if 0<=rc<size and 0<=cc<size and dark(rc,cc): rgba+=[0,0,0,255]
+            else: rgba+=[255,255,255,255]
+    def chunk(name,data):
+        c=zlib.crc32(name+data)&0xffffffff
+        return struct.pack('>I',len(data))+name+data+struct.pack('>I',c)
+    rows=b''
+    for y in range(h):
+        rows+=bytes([0])+bytes(rgba[y*w*4:(y+1)*w*4])
+    comp=zlib.compress(rows,9)
+    ihdr=struct.pack('>II',w,h)+bytes([8,2,0,0,0])
+    png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',ihdr)+chunk(b'IDAT',comp)+chunk(b'IEND',b'')
+    return base64.b64encode(png).decode()
 
 @app.route('/ficha/<id>')
 def ficha_publica(id):
@@ -285,8 +291,8 @@ def stats():
     valor = conn.execute("SELECT COALESCE(SUM(precio),0) as s FROM activos").fetchone()['s']
     por_edificio = conn.execute("SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio").fetchall()
     conn.close()
-    return jsonify({'total': total, 'buenos': buenos, 'malos': malos,
-                    'valor': valor, 'por_edificio': [dict(r) for r in por_edificio]})
+    return jsonify({'total':total,'buenos':buenos,'malos':malos,
+                    'valor':valor,'por_edificio':[dict(r) for r in por_edificio]})
 
 @app.route('/api/export/excel')
 @login_required
@@ -296,30 +302,24 @@ def export_excel():
     conn = get_db()
     rows = conn.execute("SELECT * FROM activos ORDER BY id").fetchall()
     conn.close()
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Activos Fijos"
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title = "Activos Fijos"
     headers = ['ID Activo','Tipo','Subtipo','Marca','Modelo','N° Serie','Estado',
-               'Edificio','Sala','Responsable','Fecha Compra','Precio','Documento',
-               'Vida Útil','Observaciones']
+               'Edificio','Sala','Responsable','Fecha Compra','Precio','Documento','Vida Útil','Observaciones']
     keys = ['id','tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
             'responsable','fecha_compra','precio','documento','vida_util','observaciones']
-    for col, h in enumerate(headers, 1):
-        cell = ws.cell(row=1, column=col, value=h)
-        cell.font = Font(bold=True, color='FFFFFF')
-        cell.fill = PatternFill('solid', start_color='1F3864', fgColor='1F3864')
-        cell.alignment = Alignment(horizontal='center')
-        ws.column_dimensions[ws.cell(row=1,column=col).column_letter].width = 18
-    for row_idx, row in enumerate(rows, 2):
-        for col, key in enumerate(keys, 1):
-            ws.cell(row=row_idx, column=col, value=row[key])
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return send_file(buf, download_name='activos_fijos.xlsx',
-                     as_attachment=True,
+    for col,h in enumerate(headers,1):
+        cell=ws.cell(row=1,column=col,value=h)
+        cell.font=Font(bold=True,color='FFFFFF')
+        cell.fill=PatternFill('solid',start_color='1F3864',fgColor='1F3864')
+        cell.alignment=Alignment(horizontal='center')
+        ws.column_dimensions[ws.cell(row=1,column=col).column_letter].width=18
+    for ri,row in enumerate(rows,2):
+        for col,key in enumerate(keys,1):
+            ws.cell(row=ri,column=col,value=row[key])
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf,download_name='activos_fijos.xlsx',as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 if __name__ == '__main__':
     init_db()
-    app.run(debug=False, host='0.0.0.0', port=int(os.environ.get('PORT', 5000)))
+    app.run(debug=False,host='0.0.0.0',port=int(os.environ.get('PORT',5000)))
