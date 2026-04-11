@@ -782,6 +782,24 @@ def get_kpis():
         'proximos_depreciar':sorted(proximos_depreciar, key=lambda x:-x['porcentaje'])[:5],
     })
 
+
+@app.route('/api/kpis/subtipo')
+@login_required
+def kpis_subtipo():
+    por_subtipo = db_fetchall(
+        """SELECT subtipo, COUNT(*) as n FROM activos
+           WHERE subtipo IS NOT NULL AND subtipo != ''
+           GROUP BY subtipo ORDER BY n DESC""")
+    por_subtipo_edificio = db_fetchall(
+        """SELECT subtipo, edificio, COUNT(*) as n FROM activos
+           WHERE subtipo IS NOT NULL AND subtipo != ''
+             AND edificio IS NOT NULL AND edificio != ''
+           GROUP BY subtipo, edificio ORDER BY subtipo, n DESC""")
+    return jsonify({
+        'por_subtipo': por_subtipo,
+        'por_subtipo_edificio': por_subtipo_edificio
+    })
+
 if __name__=='__main__':
     init_db()
     app.run(debug=False,host='0.0.0.0',port=int(os.environ.get('PORT',5000)))
