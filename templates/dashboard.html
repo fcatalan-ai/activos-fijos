@@ -14,8 +14,8 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 .topbar-links a:hover{color:#fff}
 .topbar-links a.active{color:#FFD966;font-weight:600}
 .main{padding:20px;max-width:1400px;margin:0 auto}
-.section-title{font-size:13px;font-weight:700;color:#1F3864;text-transform:uppercase;letter-spacing:.05em;margin:24px 0 12px;border-left:4px solid #1F3864;padding-left:10px}
-/* KPI CARDS */
+.sec{font-size:12px;font-weight:700;color:#1F3864;text-transform:uppercase;letter-spacing:.05em;margin:20px 0 12px;border-left:4px solid #1F3864;padding-left:10px}
+/* KPI */
 .kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:8px}
 @media(max-width:900px){.kpi-grid{grid-template-columns:repeat(2,1fr)}}
 .kpi{background:#fff;border-radius:10px;padding:16px 18px;border:1px solid #e5e8ed;display:flex;align-items:center;gap:14px}
@@ -23,10 +23,19 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 .kpi-n{font-size:22px;font-weight:700;color:#1F3864;line-height:1}
 .kpi-l{font-size:11px;color:#888;margin-top:4px}
 .kpi-sub{font-size:11px;color:#27500A;margin-top:2px;font-weight:600}
+/* FILTROS */
+.filtro-card{background:#fff;border-radius:10px;border:1px solid #e5e8ed;padding:16px;margin-bottom:16px}
+.filtro-row{display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end}
+.fg label{font-size:11px;color:#666;display:block;margin-bottom:3px}
+.fg input,.fg select{padding:7px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px;background:#fff;min-width:140px}
+.btn-aplicar{background:#1F3864;color:#fff;border:none;padding:8px 18px;border-radius:7px;font-size:13px;cursor:pointer}
+.btn-aplicar:hover{background:#2E74B5}
+.btn-limpiar{background:#fff;color:#555;border:1px solid #ddd;padding:8px 12px;border-radius:7px;font-size:13px;cursor:pointer}
+.filtro-badge{display:none;background:#E6F1FB;color:#1F3864;padding:4px 12px;border-radius:20px;font-size:12px;font-weight:600;margin-top:10px}
 /* CHARTS */
-.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
-.charts-grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
-@media(max-width:900px){.charts-grid,.charts-grid-3{grid-template-columns:1fr}}
+.charts-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-bottom:16px}
+.charts-2{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px}
+@media(max-width:900px){.charts-3,.charts-2{grid-template-columns:1fr}}
 .chart-card{background:#fff;border-radius:10px;border:1px solid #e5e8ed;padding:16px}
 .chart-title{font-size:12px;font-weight:700;color:#1F3864;margin-bottom:12px;text-transform:uppercase;letter-spacing:.03em}
 .chart-wrap{position:relative;height:220px}
@@ -37,21 +46,20 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 .table-card td{padding:8px 12px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
 .table-card tr:last-child td{border-bottom:none}
 .table-card tr:hover td{background:#f8fafc}
-.badge{display:inline-block;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
-.badge-g{background:#EAF3DE;color:#27500A}
-.badge-r{background:#FCEBEB;color:#791F1F}
-.badge-a{background:#FAEEDA;color:#633806}
+.badge-g{background:#EAF3DE;color:#27500A;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
+.badge-r{background:#FCEBEB;color:#791F1F;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:600}
 .loading{text-align:center;padding:40px;color:#999;font-size:14px}
-.alerta-dep{background:#FCEBEB;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;font-size:12px}
 .bar-bg{background:#eee;border-radius:10px;height:8px;flex:1;margin:0 10px;overflow:hidden}
 .bar-fill{height:100%;border-radius:10px;background:#C00}
+.alerta-dep{background:#fff;border:1px solid #fcc;border-radius:8px;padding:12px;margin-bottom:6px;display:flex;justify-content:space-between;align-items:center}
 </style>
 </head>
 <body>
 <div class="topbar">
-  <h1>🏫 Activos Fijos — Colegio</h1>
+  <h1>🏫 Activos Fijos — Dashboard</h1>
   <div class="topbar-links">
     <a href="/">Inventario</a>
+    <a href="/movimientos">📋 Movimientos</a>
     <a href="/dashboard" class="active">📊 Dashboard</a>
     <a href="/logout">Cerrar sesión</a>
   </div>
@@ -59,173 +67,286 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 
 <div class="main">
 
-  <div class="section-title">Resumen general</div>
-  <div class="kpi-grid" id="kpi-row">
+  <div class="sec">Resumen general</div>
+  <div class="kpi-grid">
     <div class="kpi"><div class="kpi-icon" style="background:#E6F1FB">📦</div><div><div class="kpi-n" id="k-total">—</div><div class="kpi-l">Total activos</div></div></div>
     <div class="kpi"><div class="kpi-icon" style="background:#E2EFDA">💰</div><div><div class="kpi-n" id="k-valor">—</div><div class="kpi-l">Valor inventario</div><div class="kpi-sub" id="k-actual">—</div></div></div>
-    <div class="kpi"><div class="kpi-icon" style="background:#FCE4D6">🔧</div><div><div class="kpi-n" id="k-mant">—</div><div class="kpi-l">Gasto en mantenciones</div></div></div>
+    <div class="kpi"><div class="kpi-icon" style="background:#FCE4D6">🔧</div><div><div class="kpi-n" id="k-mant">—</div><div class="kpi-l">Gasto mantenciones</div></div></div>
     <div class="kpi"><div class="kpi-icon" style="background:#FAEEDA">⚠️</div><div><div class="kpi-n" id="k-dep">—</div><div class="kpi-l">Depreciación acumulada</div></div></div>
   </div>
 
-  <div class="charts-grid-3">
+  <!-- FILTROS -->
+  <div class="sec">Filtrar gráficos</div>
+  <div class="filtro-card">
+    <div class="filtro-row">
+      <div class="fg">
+        <label>Tipo de activo</label>
+        <select id="fil-tipo">
+          <option value="">Todos los tipos</option>
+          <option>Equipamiento Tecnológico</option>
+          <option>Equipamiento Audiovisual</option>
+          <option>Equipamiento Deportivo</option>
+          <option>Mobiliario</option>
+          <option>Muebles y Útiles</option>
+          <option>Otro</option>
+        </select>
+      </div>
+      <div class="fg">
+        <label>Subtipo</label>
+        <input id="fil-subtipo" placeholder="Ej: Notebook, Proyector...">
+      </div>
+      <div class="fg">
+        <label>Edificio</label>
+        <select id="fil-edificio">
+          <option value="">Todos</option>
+          <option>Básica</option><option>Media</option>
+          <option>Parvularia</option><option>Administración</option>
+        </select>
+      </div>
+      <div class="fg">
+        <button class="btn-aplicar" onclick="cargarDashboard()">🔍 Aplicar filtros</button>
+      </div>
+      <div class="fg">
+        <button class="btn-limpiar" onclick="limpiarFiltros()">✕ Limpiar</button>
+      </div>
+    </div>
+    <div class="filtro-badge" id="filtro-badge">Filtrando por: —</div>
+  </div>
+
+  <!-- GRÁFICOS FILA 1 -->
+  <div class="sec">Distribución del inventario</div>
+  <div class="charts-3">
     <div class="chart-card">
       <div class="chart-title">Activos por estado</div>
-      <div class="chart-wrap"><canvas id="chart-estado"></canvas></div>
+      <div class="chart-wrap"><canvas id="ch-estado"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">Activos por edificio</div>
-      <div class="chart-wrap"><canvas id="chart-edificio"></canvas></div>
+      <div class="chart-wrap"><canvas id="ch-edificio"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">Activos por tipo</div>
-      <div class="chart-wrap"><canvas id="chart-tipo"></canvas></div>
+      <div class="chart-wrap"><canvas id="ch-tipo"></canvas></div>
     </div>
   </div>
 
-  <div class="charts-grid">
+  <!-- GRÁFICOS FILA 2 — SUBTIPO -->
+  <div class="charts-2">
+    <div class="chart-card">
+      <div class="chart-title">Activos por subtipo</div>
+      <div class="chart-wrap" style="height:260px"><canvas id="ch-subtipo"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Subtipo por edificio</div>
+      <div style="overflow-y:auto;max-height:260px" id="tabla-subtipo"></div>
+    </div>
+  </div>
+
+  <!-- GRÁFICOS FILA 3 — MANTENCIONES -->
+  <div class="sec">Mantenciones y costos</div>
+  <div class="charts-2">
     <div class="chart-card">
       <div class="chart-title">Costo mantenciones por mes</div>
-      <div class="chart-wrap"><canvas id="chart-mant-mes"></canvas></div>
+      <div class="chart-wrap"><canvas id="ch-mant-mes"></canvas></div>
     </div>
     <div class="chart-card">
       <div class="chart-title">Costo mantenciones por tipo de activo</div>
-      <div class="chart-wrap"><canvas id="chart-costo-tipo"></canvas></div>
+      <div class="chart-wrap"><canvas id="ch-costo-tipo"></canvas></div>
     </div>
   </div>
 
-  <div class="section-title">Activos más problemáticos</div>
+  <!-- TABLA MÁS PROBLEMÁTICOS -->
+  <div class="sec">Activos más problemáticos</div>
   <div class="table-card">
     <table>
       <thead><tr><th>ID Activo</th><th>Descripción</th><th>Edificio</th><th>N° Mantenciones</th><th>Costo Total</th></tr></thead>
-      <tbody id="tabla-problematicos"><tr><td colspan="5" class="loading">Cargando...</td></tr></tbody>
+      <tbody id="tabla-prob"><tr><td colspan="5" class="loading">Cargando...</td></tr></tbody>
     </table>
   </div>
 
-  <div class="section-title">Activos próximos a depreciar (≥70%)</div>
+  <!-- DEPRECIACIÓN -->
+  <div class="sec">Activos próximos a depreciar (≥70%)</div>
   <div id="dep-alertas"><div class="loading">Cargando...</div></div>
 
 </div>
 
 <script>
 const FMT = n => '$' + Math.round(n).toLocaleString('es-CL');
-const COLORS = ['#2E74B5','#70AD47','#ED7D31','#7030A0','#C00','#00B0F0','#FFC000','#43682B'];
+const COLORS = ['#2E74B5','#70AD47','#ED7D31','#7030A0','#C00','#00B0F0','#FFC000','#43682B','#1F3864','#FF7F7F'];
+let charts = {};
+
+function destroyCharts(){
+  Object.values(charts).forEach(c=>{ try{ c.destroy(); }catch(e){} });
+  charts = {};
+}
+
+function getFiltros(){
+  return {
+    tipo:     document.getElementById('fil-tipo').value,
+    subtipo:  document.getElementById('fil-subtipo').value,
+    edificio: document.getElementById('fil-edificio').value,
+  };
+}
+
+function limpiarFiltros(){
+  document.getElementById('fil-tipo').value='';
+  document.getElementById('fil-subtipo').value='';
+  document.getElementById('fil-edificio').value='';
+  document.getElementById('filtro-badge').style.display='none';
+  cargarDashboard();
+}
 
 async function cargarDashboard(){
-  const params = new URLSearchParams(filtrosActivos||{});
-  const [r, r2] = await Promise.all([
+  destroyCharts();
+  const f = getFiltros();
+  const params = new URLSearchParams(f);
+
+  // Badge filtro activo
+  const partes=[];
+  if(f.tipo)     partes.push(f.tipo.replace('Equipamiento ','Eq. '));
+  if(f.subtipo)  partes.push(f.subtipo);
+  if(f.edificio) partes.push(f.edificio);
+  const badge = document.getElementById('filtro-badge');
+  if(partes.length){
+    badge.textContent='🔍 Filtrando: '+partes.join(' · ');
+    badge.style.display='block';
+  } else {
+    badge.style.display='none';
+  }
+
+  const [r1, r2] = await Promise.all([
     fetch('/api/kpis?'+params),
     fetch('/api/kpis/subtipo?'+params)
   ]);
-  const d = await r.json();
-  const sub = await r2.json();
+  const d  = await r1.json();
+  const ds = await r2.json();
 
   // KPIs
-  document.getElementById('k-total').textContent = d.totales?.total ?? 0;
-  document.getElementById('k-valor').textContent = FMT(d.totales?.valor ?? 0);
-  document.getElementById('k-actual').textContent = `Valor actual: ${FMT(d.valor_actual_total)}`;
-  document.getElementById('k-mant').textContent = FMT(d.costo_mantenciones ?? 0);
-  document.getElementById('k-dep').textContent = FMT(d.dep_acum_total ?? 0);
+  document.getElementById('k-total').textContent  = d.totales?.total ?? 0;
+  document.getElementById('k-valor').textContent  = FMT(d.totales?.valor ?? 0);
+  document.getElementById('k-actual').textContent = 'Valor actual: '+FMT(d.valor_actual_total??0);
+  document.getElementById('k-mant').textContent   = FMT(d.costo_mantenciones??0);
+  document.getElementById('k-dep').textContent    = FMT(d.dep_acum_total??0);
 
-  // Chart: por estado
-  const estados = d.por_estado || [];
-  new Chart(document.getElementById('chart-estado'), {
-    type: 'doughnut',
-    data: {
-      labels: estados.map(e=>e.estado),
-      datasets:[{
-        data: estados.map(e=>e.n),
-        backgroundColor: estados.map(e=>e.estado==='Bueno'?'#70AD47':e.estado==='Regular'?'#ED7D31':'#C00'),
-        borderWidth: 2, borderColor: '#fff'
-      }]
-    },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:11 } } } } }
+  // Por estado
+  const estados = d.por_estado||[];
+  charts['estado'] = new Chart(document.getElementById('ch-estado'),{
+    type:'doughnut',
+    data:{labels:estados.map(e=>e.estado),datasets:[{
+      data:estados.map(e=>e.n),
+      backgroundColor:estados.map(e=>e.estado==='Bueno'?'#70AD47':e.estado==='Regular'?'#ED7D31':'#C00'),
+      borderWidth:2,borderColor:'#fff'
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{position:'bottom',labels:{font:{size:11}}}}}
   });
 
-  // Chart: por edificio
-  const edifs = d.por_edificio || [];
-  new Chart(document.getElementById('chart-edificio'), {
-    type: 'bar',
-    data: {
-      labels: edifs.map(e=>e.edificio||'Sin asignar'),
-      datasets:[{ label:'Activos', data: edifs.map(e=>e.n),
-        backgroundColor:['#2E74B5','#70AD47','#7030A0','#ED7D31'],
-        borderRadius:6 }]
-    },
-    options:{ responsive:true, maintainAspectRatio:false, plugins:{ legend:{ display:false } },
-      scales:{ y:{ beginAtZero:true, ticks:{ font:{ size:10 } } }, x:{ ticks:{ font:{ size:10 } } } } }
+  // Por edificio
+  const edifs = d.por_edificio||[];
+  charts['edificio'] = new Chart(document.getElementById('ch-edificio'),{
+    type:'bar',
+    data:{labels:edifs.map(e=>e.edificio||'Sin asignar'),datasets:[{
+      label:'Activos',data:edifs.map(e=>e.n),
+      backgroundColor:['#2E74B5','#70AD47','#7030A0','#ED7D31','#FFC000'],borderRadius:6
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{y:{beginAtZero:true,ticks:{font:{size:10}}},x:{ticks:{font:{size:10}}}}}
   });
 
-  // Chart: por tipo
-  const tipos = d.por_tipo || [];
-  new Chart(document.getElementById('chart-tipo'), {
-    type: 'bar',
-    data: {
-      labels: tipos.map(t=>(t.tipo||'Otro').replace('Equipamiento ','Eq. ')),
-      datasets:[{ label:'Activos', data: tipos.map(t=>t.n),
-        backgroundColor: tipos.map((_,i)=>COLORS[i%COLORS.length]),
-        borderRadius:6 }]
-    },
-    options:{ indexAxis:'y', responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ display:false } },
-      scales:{ x:{ beginAtZero:true, ticks:{ font:{ size:10 } } }, y:{ ticks:{ font:{ size:10 } } } } }
+  // Por tipo
+  const tipos = d.por_tipo||[];
+  charts['tipo'] = new Chart(document.getElementById('ch-tipo'),{
+    type:'bar',
+    data:{labels:tipos.map(t=>(t.tipo||'Otro').replace('Equipamiento ','Eq. ')),datasets:[{
+      label:'Activos',data:tipos.map(t=>t.n),
+      backgroundColor:tipos.map((_,i)=>COLORS[i%COLORS.length]),borderRadius:6
+    }]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+      scales:{x:{beginAtZero:true,ticks:{font:{size:10}}},y:{ticks:{font:{size:10}}}}}
   });
 
-  // Chart: mantenciones por mes
-  const meses = d.mant_por_mes || [];
-  new Chart(document.getElementById('chart-mant-mes'), {
-    type: 'bar',
-    data: {
-      labels: meses.map(m=>m.mes||''),
-      datasets:[
-        { label:'Costo ($)', data: meses.map(m=>m.costo||0),
-          backgroundColor:'#2E74B5', borderRadius:4, yAxisID:'y' },
-        { label:'N° Mantenciones', data: meses.map(m=>m.n||0),
-          type:'line', borderColor:'#ED7D31', backgroundColor:'transparent',
-          pointBackgroundColor:'#ED7D31', tension:0.3, yAxisID:'y1' }
-      ]
-    },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ labels:{ font:{ size:10 } } } },
+  // Por subtipo
+  const subtipos = ds.por_subtipo||[];
+  charts['subtipo'] = new Chart(document.getElementById('ch-subtipo'),{
+    type:'bar',
+    data:{labels:subtipos.map(s=>s.subtipo||'—'),datasets:[{
+      label:'Activos',data:subtipos.map(s=>s.n),
+      backgroundColor:subtipos.map((_,i)=>COLORS[i%COLORS.length]),borderRadius:5
+    }]},
+    options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.raw} activos`}}},
+      scales:{x:{beginAtZero:true,ticks:{font:{size:10},stepSize:1}},y:{ticks:{font:{size:11}}}}}
+  });
+
+  // Tabla subtipo x edificio
+  const subEd   = ds.por_subtipo_edificio||[];
+  const eds_u   = [...new Set(subEd.map(r=>r.edificio))].sort();
+  const subs_u  = [...new Set(subEd.map(r=>r.subtipo))];
+  let tbl = '<table style="width:100%;border-collapse:collapse;font-size:12px">';
+  tbl += '<thead><tr><th style="background:#1F3864;color:#fff;padding:7px 10px;text-align:left">Subtipo</th>';
+  eds_u.forEach(ed=>{ tbl+=`<th style="background:#1F3864;color:#fff;padding:7px 10px;text-align:center">${ed}</th>`; });
+  tbl += '<th style="background:#1F3864;color:#fff;padding:7px 10px;text-align:center">Total</th></tr></thead><tbody>';
+  subs_u.forEach((st,i)=>{
+    const bg = i%2===0?'#f8fafc':'#fff';
+    tbl += `<tr style="background:${bg}"><td style="padding:6px 10px;font-weight:600;color:#1F3864">${st}</td>`;
+    let tot=0;
+    eds_u.forEach(ed=>{
+      const found=subEd.find(r=>r.subtipo===st&&r.edificio===ed);
+      const n=found?found.n:0; tot+=n;
+      tbl+=`<td style="padding:6px 10px;text-align:center">${n||'—'}</td>`;
+    });
+    tbl+=`<td style="padding:6px 10px;text-align:center;font-weight:700;color:#1F3864">${tot}</td></tr>`;
+  });
+  tbl+='</tbody></table>';
+  document.getElementById('tabla-subtipo').innerHTML = subs_u.length ? tbl
+    : '<div class="loading" style="padding:20px">Sin datos de subtipo</div>';
+
+  // Mantenciones por mes
+  const meses = d.mant_por_mes||[];
+  charts['mant'] = new Chart(document.getElementById('ch-mant-mes'),{
+    type:'bar',
+    data:{labels:meses.map(m=>m.mes||''),datasets:[
+      {label:'Costo ($)',data:meses.map(m=>m.costo||0),backgroundColor:'#2E74B5',borderRadius:4,yAxisID:'y'},
+      {label:'N° Mantenciones',data:meses.map(m=>m.n||0),type:'line',borderColor:'#ED7D31',
+       backgroundColor:'transparent',pointBackgroundColor:'#ED7D31',tension:0.3,yAxisID:'y1'}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{labels:{font:{size:10}}}},
       scales:{
-        y:{ beginAtZero:true, ticks:{ callback: v=>'$'+v.toLocaleString('es-CL'), font:{size:9} } },
-        y1:{ beginAtZero:true, position:'right', grid:{ drawOnChartArea:false }, ticks:{ font:{size:9} } }
-      }
-    }
+        y:{beginAtZero:true,ticks:{callback:v=>'$'+v.toLocaleString('es-CL'),font:{size:9}}},
+        y1:{beginAtZero:true,position:'right',grid:{drawOnChartArea:false},ticks:{font:{size:9}}}
+      }}
   });
 
-  // Chart: costo por tipo
+  // Costo por tipo
   const ctipo = (d.costo_por_tipo||[]).filter(t=>t.costo_total>0);
-  new Chart(document.getElementById('chart-costo-tipo'), {
-    type: 'doughnut',
-    data: {
-      labels: ctipo.map(t=>(t.tipo||'Otro').replace('Equipamiento ','Eq. ')),
-      datasets:[{ data: ctipo.map(t=>t.costo_total),
-        backgroundColor: ctipo.map((_,i)=>COLORS[i%COLORS.length]),
-        borderWidth:2, borderColor:'#fff' }]
-    },
-    options:{ responsive:true, maintainAspectRatio:false,
-      plugins:{ legend:{ position:'bottom', labels:{ font:{ size:10 } } },
-        tooltip:{ callbacks:{ label: ctx=>' $'+Math.round(ctx.raw).toLocaleString('es-CL') } } } }
+  charts['ctipo'] = new Chart(document.getElementById('ch-costo-tipo'),{
+    type:'doughnut',
+    data:{labels:ctipo.map(t=>(t.tipo||'Otro').replace('Equipamiento ','Eq. ')),datasets:[{
+      data:ctipo.map(t=>t.costo_total),
+      backgroundColor:ctipo.map((_,i)=>COLORS[i%COLORS.length]),borderWidth:2,borderColor:'#fff'
+    }]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:10}}},
+        tooltip:{callbacks:{label:ctx=>' $'+Math.round(ctx.raw).toLocaleString('es-CL')}}}}
   });
 
-  // Tabla problematicos
-  const prob = d.mas_problematicos || [];
-  document.getElementById('tabla-problematicos').innerHTML = prob.length
+  // Tabla problemáticos
+  const prob = d.mas_problematicos||[];
+  document.getElementById('tabla-prob').innerHTML = prob.length
     ? prob.map(p=>`<tr>
         <td style="font-weight:700;color:#1F3864">${p.id}</td>
         <td>${p.subtipo||''} ${p.marca||''} ${p.modelo||''}</td>
         <td>${p.edificio||'—'}</td>
-        <td style="text-align:center"><span class="badge badge-r">${p.num_mant}</span></td>
+        <td style="text-align:center"><span class="badge-r">${p.num_mant}</span></td>
         <td style="font-weight:600;color:#C00">${FMT(p.costo_total)}</td>
       </tr>`).join('')
     : '<tr><td colspan="5" class="loading">Sin mantenciones registradas aún</td></tr>';
 
-  // Alertas depreciacion
-  const deps = d.proximos_depreciar || [];
+  // Alertas depreciación
+  const deps = d.proximos_depreciar||[];
   document.getElementById('dep-alertas').innerHTML = deps.length
     ? deps.map(dep=>{
-        const color = dep.porcentaje>=100?'#C00':dep.porcentaje>=80?'#ED7D31':'#d4a017';
+        const color=dep.porcentaje>=100?'#C00':dep.porcentaje>=80?'#ED7D31':'#d4a017';
         return `<div class="alerta-dep">
           <div style="min-width:180px">
             <div style="font-weight:700;font-size:12px;color:${color}">${dep.tipo}</div>
@@ -235,39 +356,7 @@ async function cargarDashboard(){
           <div style="font-weight:700;font-size:13px;color:${color};min-width:50px;text-align:right">${dep.porcentaje}%</div>
         </div>`;
       }).join('')
-    : '<div class="loading" style="padding:16px">No hay activos con depreciación avanzada (&ge;70%)</div>';
-}
-
-
-let filtrosActivos = {};
-
-function aplicarFiltros(){
-  filtrosActivos = {
-    tipo:     document.getElementById('fil-tipo').value,
-    subtipo:  document.getElementById('fil-subtipo').value,
-    edificio: document.getElementById('fil-edificio').value,
-  };
-  const partes = [];
-  if(filtrosActivos.tipo)     partes.push(filtrosActivos.tipo.replace('Equipamiento ',''));
-  if(filtrosActivos.subtipo)  partes.push(filtrosActivos.subtipo);
-  if(filtrosActivos.edificio) partes.push(filtrosActivos.edificio);
-  const badge = document.getElementById('filtro-activo-badge');
-  if(partes.length){
-    badge.textContent = '🔍 '+partes.join(' · ');
-    badge.style.display='inline-block';
-  } else {
-    badge.style.display='none';
-  }
-  cargarDashboard();
-}
-
-function limpiarFiltros(){
-  document.getElementById('fil-tipo').value='';
-  document.getElementById('fil-subtipo').value='';
-  document.getElementById('fil-edificio').value='';
-  filtrosActivos={};
-  document.getElementById('filtro-activo-badge').style.display='none';
-  cargarDashboard();
+    : '<div class="loading" style="padding:16px">No hay activos con depreciación ≥70%</div>';
 }
 
 cargarDashboard();
