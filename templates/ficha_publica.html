@@ -11,9 +11,10 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:16
 .head h1{font-size:18px;font-weight:700}
 .head p{font-size:12px;color:#9BB8D8;margin-top:3px}
 .badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;margin-top:8px}
-.badge-bueno{background:#EAF3DE;color:#27500A}
-.badge-regular{background:#FAEEDA;color:#633806}
-.badge-malo{background:#FCEBEB;color:#791F1F}
+.badge-Bueno{background:#EAF3DE;color:#27500A}
+.badge-Regular{background:#FAEEDA;color:#633806}
+.badge-Malo{background:#FCEBEB;color:#791F1F}
+.foto{width:100%;max-height:220px;object-fit:cover;border-bottom:1px solid #eee}
 .body{padding:20px}
 .section{margin-bottom:16px}
 .section-title{font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f0f0f0}
@@ -28,8 +29,11 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:16
   <div class="head">
     <h1>{{ a.id }}</h1>
     <p>{{ a.tipo }} — {{ a.subtipo }}</p>
-    <span class="badge badge-{{ a.estado|lower if a.estado else 'bueno' }}">{{ a.estado }}</span>
+    <span class="badge badge-{{ a.estado }}">{{ a.estado }}</span>
   </div>
+  {% if a.foto %}
+  <img src="{{ a.foto }}" class="foto" alt="Foto del activo">
+  {% endif %}
   <div class="body">
     <div class="section">
       <div class="section-title">Identificación</div>
