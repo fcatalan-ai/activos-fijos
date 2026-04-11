@@ -89,6 +89,7 @@ tr:hover td{background:#f8fafc}
   <h1>🏫 Activos Fijos — Colegio</h1>
   <div class="topbar-right">
     <span>{{ user }} {% if rol=='admin' %}(Admin){% else %}(Consulta){% endif %}</span>
+    <a href="/dashboard" style="color:#FFD966;font-weight:600">📊 Dashboard</a>
     <a href="/logout">Cerrar sesión</a>
   </div>
 </div>
@@ -149,6 +150,7 @@ tr:hover td{background:#f8fafc}
       <button class="tab" onclick="showTab('foto',this)">Foto</button>
       <button class="tab" onclick="showTab('historial',this)">Historial</button>
       <button class="tab" onclick="showTab('dep',this)">📉 Depreciación</button>
+      <button class="tab" onclick="showTab('mant',this)">🔧 Mantenciones</button>
       <button class="tab" onclick="showTab('qr',this)">QR / Código</button>
     </div>
 
@@ -200,6 +202,16 @@ tr:hover td{background:#f8fafc}
     <div id="tab-dep" style="display:none">
       <div class="section-lbl">Depreciación según SII</div>
       <div id="dep-contenido"><div class="loading">Sin datos de depreciación</div></div>
+    </div>
+
+    <div id="tab-mant" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div class="section-lbl" style="margin-bottom:0">Registro de mantenciones</div>
+        {% if rol == 'admin' %}
+        <button class="btn-sm" style="color:#1F3864;border-color:#1F3864" onclick="abrirModalMant()">+ Nueva</button>
+        {% endif %}
+      </div>
+      <div id="mant-list"><div class="loading">Cargando...</div></div>
     </div>
 
     <div id="tab-historial" style="display:none">
@@ -292,6 +304,33 @@ tr:hover td{background:#f8fafc}
       <button class="btn-cancel" onclick="cerrarModal('modal-importar')">Cancelar</button>
       <button class="btn-sm" id="btn-debug" onclick="debugExcel()" disabled style="color:#555">🔍 Diagnosticar</button>
       <button class="btn-save" style="background:#27500A" id="btn-importar" onclick="ejecutarImport()" disabled>Importar activos</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL MANTENCION -->
+<div class="modal-bg" id="modal-mant">
+  <div class="modal" style="max-width:500px">
+    <h3>🔧 Registrar Mantención / Reparación</h3>
+    <div class="form-row">
+      <div class="form-group"><label>Fecha *</label><input id="mn-fecha" type="date"></div>
+      <div class="form-group"><label>Tipo</label>
+        <select id="mn-tipo"><option value="correctiva">Correctiva</option><option value="preventiva">Preventiva</option></select></div>
+    </div>
+    <div class="form-group" style="margin-bottom:12px"><label>Descripción del trabajo *</label>
+      <textarea id="mn-desc" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:7px;font-size:13px;resize:vertical"></textarea></div>
+    <div class="form-row">
+      <div class="form-group"><label>Costo ($)</label><input id="mn-costo" type="number" min="0" placeholder="0"></div>
+      <div class="form-group"><label>Proveedor / Técnico</label><input id="mn-prov" placeholder="Nombre empresa o técnico"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Estado resultado</label>
+        <select id="mn-estado"><option value="solucionado">Solucionado</option><option value="pendiente">Pendiente</option></select></div>
+      <div class="form-group"><label>Próxima mantención</label><input id="mn-prox" type="date"></div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="cerrarModal('modal-mant')">Cancelar</button>
+      <button class="btn-save" onclick="guardarMant()">Guardar mantención</button>
     </div>
   </div>
 </div>
@@ -413,6 +452,7 @@ async function abrirPanel(id){
       <div class="hist-date">${m.fecha} — ${m.usuario}</div></div></div>`).join('')
     :'<div class="loading">Sin movimientos registrados</div>';
   renderDepreciacion(d.depreciacion);
+  cargarMantenciones(id);
   cargarQR(id);
   drawBarcode(id);
   showTab('ficha',document.querySelector('.tab'));
@@ -456,7 +496,7 @@ function cerrarPanel(){
 }
 
 function showTab(tab,btn){
-  ['ficha','foto','dep','historial','qr'].forEach(t=>
+  ['ficha','foto','dep','mant','historial','qr'].forEach(t=>
     document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
@@ -689,6 +729,72 @@ async function ejecutarImport(){
     btn.disabled=false;
     btn.textContent='Importar activos';
   }
+}
+
+
+async function cargarMantenciones(id){
+  const r = await fetch('/api/activos/'+id+'/mantenciones');
+  const rows = await r.json();
+  const el = document.getElementById('mant-list');
+  if(!rows.length){
+    el.innerHTML='<div class="loading">Sin mantenciones registradas</div>'; return;
+  }
+  el.innerHTML = rows.map(m=>`
+    <div style="border:1px solid #e5e8ed;border-radius:8px;padding:12px;margin-bottom:8px;background:#fafafa">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <span style="font-size:10px;font-weight:700;text-transform:uppercase;color:${m.tipo==='preventiva'?'#27500A':'#C00'}">${m.tipo}</span>
+          <span style="font-size:10px;margin-left:8px;color:${m.estado==='solucionado'?'#27500A':'#ED7D31'}">● ${m.estado}</span>
+        </div>
+        <div style="font-size:11px;color:#999">${m.fecha||'Sin fecha'}</div>
+      </div>
+      <div style="font-size:13px;color:#333;margin:6px 0">${m.descripcion||'—'}</div>
+      <div style="display:flex;gap:16px;font-size:11px;color:#666">
+        ${m.proveedor?'<span>👤 '+m.proveedor+'</span>':''}
+        ${m.costo?'<span>💰 $'+Number(m.costo).toLocaleString('es-CL')+'</span>':''}
+        ${m.proxima_fecha?'<span>📅 Próx: '+m.proxima_fecha+'</span>':''}
+      </div>
+      {% if rol == 'admin' %}
+      <div style="text-align:right;margin-top:6px">
+        <button class="btn-sm" style="color:#c00;font-size:10px" onclick="eliminarMant(${m.id})">Eliminar</button>
+      </div>
+      {% endif %}
+    </div>`).join('');
+}
+
+function abrirModalMant(){
+  if(!activoActual) return;
+  document.getElementById('mn-fecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('mn-desc').value = '';
+  document.getElementById('mn-costo').value = '';
+  document.getElementById('mn-prov').value = '';
+  document.getElementById('mn-prox').value = '';
+  document.getElementById('modal-mant').classList.add('show');
+}
+
+async function guardarMant(){
+  if(!activoActual) return;
+  const data = {
+    fecha:        document.getElementById('mn-fecha').value,
+    tipo:         document.getElementById('mn-tipo').value,
+    descripcion:  document.getElementById('mn-desc').value,
+    costo:        parseFloat(document.getElementById('mn-costo').value)||0,
+    proveedor:    document.getElementById('mn-prov').value,
+    estado:       document.getElementById('mn-estado').value,
+    proxima_fecha:document.getElementById('mn-prox').value,
+  };
+  if(!data.descripcion){ alert('La descripción es obligatoria'); return; }
+  await fetch('/api/activos/'+activoActual.id+'/mantenciones',
+    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  cerrarModal('modal-mant');
+  cargarMantenciones(activoActual.id);
+  cargarStats();
+}
+
+async function eliminarMant(mid){
+  if(!confirm('¿Eliminar esta mantención?')) return;
+  await fetch('/api/mantenciones/'+mid, {method:'DELETE'});
+  cargarMantenciones(activoActual.id);
 }
 
 function confirmarEliminar(){
