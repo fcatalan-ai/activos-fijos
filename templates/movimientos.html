@@ -151,41 +151,81 @@ tr:hover td{background:#f8fafc}
   </div>
 </div>
 
-<!-- MODAL NUEVO MOVIMIENTO -->
+<!-- MODAL NUEVA GUÍA DE SALIDA -->
 <div class="modal-bg" id="modal-mov">
-  <div class="modal">
+  <div class="modal" style="max-width:560px">
     <h3>📤 Nueva Guía de Salida</h3>
-    <div style="background:#FCEBEB;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#C00;font-weight:600">
-      📤 Guía de Salida — Baja o salida definitiva del inventario
+    <div style="background:#FCEBEB;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:12px;color:#791F1F">
+      Registra la baja o salida definitiva de un activo del inventario.
     </div>
-    <input type="hidden" id="mov-tipo" value="salida">
+
+    <!-- BUSCADOR DE ACTIVO -->
     <div class="form-group" style="margin-bottom:10px">
-      <label>ID Activo *</label>
-      <input id="mov-activo-id" placeholder="Ej: AF-26-1000" oninput="buscarActivo()">
-      <div id="mov-activo-info" style="font-size:12px;color:#27500A;margin-top:4px"></div>
+      <label>Buscar activo *</label>
+      <input id="mov-buscar" placeholder="Escribe ID, subtipo, marca o modelo..." oninput="buscarActivos()" autocomplete="off"
+        style="width:100%;padding:9px 12px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+      <div id="mov-resultados" style="display:none;border:1px solid #ddd;border-radius:7px;max-height:200px;overflow-y:auto;margin-top:4px;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
     </div>
-    <div class="form-row">
-      <div class="form-group"><label>Fecha *</label><input type="date" id="mov-fecha"></div>
-      <div class="form-group"><label>Edificio destino</label>
-        <select id="mov-edificio">
-          <option value="">Sin especificar</option>
-          <option>Básica</option><option>Media</option>
-          <option>Parvularia</option><option>Administración</option>
-        </select>
+
+    <!-- ACTIVO SELECCIONADO -->
+    <div id="mov-activo-sel" style="display:none;background:#E2EFDA;border-radius:8px;padding:12px;margin-bottom:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div>
+          <div style="font-weight:700;font-size:14px;color:#1F3864" id="sel-id">—</div>
+          <div style="font-size:13px;color:#333;margin-top:2px" id="sel-desc">—</div>
+          <div style="font-size:12px;color:#666;margin-top:2px" id="sel-ubicacion">—</div>
+        </div>
+        <button onclick="limpiarSeleccion()" style="background:none;border:none;cursor:pointer;color:#888;font-size:18px">×</button>
       </div>
     </div>
-    <div class="form-group" style="margin-bottom:10px">
-      <label>Descripción / Motivo *</label>
-      <textarea id="mov-desc" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:7px;font-size:13px;resize:vertical"
-        placeholder="Ej: Baja por obsolescencia, Pérdida, Daño irreparable, Donación..."></textarea>
+    <input type="hidden" id="mov-activo-id">
+
+    <!-- DATOS DE LA GUÍA -->
+    <div id="mov-form-datos" style="display:none">
+      <div class="form-row">
+        <div class="form-group">
+          <label>Fecha *</label>
+          <input type="date" id="mov-fecha">
+        </div>
+        <div class="form-group">
+          <label>Motivo de salida *</label>
+          <select id="mov-motivo">
+            <option value="">Seleccionar...</option>
+            <option>Baja por obsolescencia</option>
+            <option>Baja por daño irreparable</option>
+            <option>Pérdida o robo</option>
+            <option>Donación</option>
+            <option>Traslado definitivo externo</option>
+            <option>Otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group" style="margin-bottom:10px">
+        <label>Descripción / Detalle</label>
+        <textarea id="mov-desc" rows="2"
+          style="width:100%;padding:8px;border:1px solid #ddd;border-radius:7px;font-size:13px;resize:vertical"
+          placeholder="Detalles adicionales del motivo de salida..."></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Responsable</label>
+          <input id="mov-resp" placeholder="Nombre del responsable">
+        </div>
+        <div class="form-group">
+          <label>Edificio</label>
+          <select id="mov-edificio">
+            <option value="">Sin especificar</option>
+            <option>Básica</option><option>Media</option>
+            <option>Parvularia</option><option>Administración</option>
+          </select>
+        </div>
+      </div>
     </div>
-    <div class="form-group" style="margin-bottom:10px">
-      <label>Responsable</label>
-      <input id="mov-resp" placeholder="Nombre del responsable">
-    </div>
+
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal()">Cancelar</button>
-      <button class="btn-save" onclick="guardarMov()">Registrar movimiento</button>
+      <button class="btn-save" id="btn-guardar-mov" onclick="guardarMov()" disabled
+        style="background:#C00">Registrar salida</button>
     </div>
   </div>
 </div>
@@ -195,19 +235,11 @@ let tipoActual = 'salida';
 let movimientos = [];
 let paginaActual = 1;
 const POR_PAGINA = 25;
-
-function setTipo(t){
-  tipoActual = t;
-  ['todos','entrada','salida'].forEach(x=>{
-    const btn = document.getElementById('tab-'+x);
-    btn.className = `tipo-tab tipo-tab-${x}` + (t===( x==='todos'?'':x) ? ' active' : '');
-  });
-  paginaActual=1; cargar();
-}
+let todosActivos = [];
 
 async function cargar(){
   const params = new URLSearchParams();
-  if(tipoActual) params.set('tipo_mov', tipoActual);
+  params.set('tipo_mov', 'salida');
   const q     = document.getElementById('f-q').value;
   const tipo  = document.getElementById('f-tipo').value;
   const ed    = document.getElementById('f-ed').value;
@@ -218,7 +250,6 @@ async function cargar(){
   if(ed)    params.set('edificio', ed);
   if(desde) params.set('desde', desde);
   if(hasta) params.set('hasta', hasta);
-
   const r = await fetch('/api/movimientos/activos?'+params);
   movimientos = await r.json();
   paginaActual=1;
@@ -228,9 +259,7 @@ async function cargar(){
 function renderTabla(){
   const inicio = (paginaActual-1)*POR_PAGINA;
   const pagina = movimientos.slice(inicio, inicio+POR_PAGINA);
-  const entradas = movimientos.filter(m=>m.tipo_mov==='entrada').length;
-  const salidas  = movimientos.filter(m=>m.tipo_mov==='salida').length;
-
+  const salidas = movimientos.filter(m=>m.tipo_mov==='salida').length;
   document.getElementById('ms-total').textContent   = movimientos.length;
   document.getElementById('ms-salidas').textContent = salidas;
 
@@ -240,11 +269,10 @@ function renderTabla(){
     document.getElementById('pag-btns').innerHTML='';
     return;
   }
-
   document.getElementById('tabla-body').innerHTML = pagina.map(m=>`
-    <tr class="${m.tipo_mov==='entrada'?'guia-entrada':'guia-salida'}">
+    <tr style="border-left:4px solid #C00">
       <td style="white-space:nowrap;color:#555">${m.fecha||'—'}</td>
-      <td><span class="${m.tipo_mov==='entrada'?'badge-e':'badge-s'}">${m.tipo_mov==='entrada'?'📥 ENTRADA':'📤 SALIDA'}</span></td>
+      <td><span class="badge-s">📤 SALIDA</span></td>
       <td style="font-weight:700;color:#1F3864">${m.activo_id}</td>
       <td style="max-width:200px;font-size:12px">${m.descripcion||'—'}</td>
       <td><span class="badge-tipo">${m.tipo_activo||'—'}</span></td>
@@ -273,55 +301,86 @@ function resetFiltros(){
 }
 function exportar(){ window.location='/api/export/movimientos-activos'; }
 
-// Modal nuevo movimiento
-function abrirNuevoMov(){
-  setTipoMov('entrada');
-  document.getElementById('mov-activo-id').value='';
-  document.getElementById('mov-activo-info').textContent='';
+// Modal nueva guía
+async function abrirNuevoMov(){
+  // Cargar todos los activos si no están cargados
+  if(!todosActivos.length){
+    const r = await fetch('/api/activos?limit=9999');
+    todosActivos = await r.json();
+  }
+  limpiarSeleccion();
+  document.getElementById('mov-buscar').value='';
   document.getElementById('mov-fecha').value=new Date().toISOString().split('T')[0];
   document.getElementById('mov-desc').value='';
   document.getElementById('mov-resp').value='';
+  document.getElementById('mov-motivo').value='';
   document.getElementById('mov-edificio').value='';
+  document.getElementById('mov-resultados').style.display='none';
   document.getElementById('modal-mov').classList.add('show');
+  setTimeout(()=>document.getElementById('mov-buscar').focus(),100);
 }
 
-function setTipoMov(tipo){
-  document.getElementById('mov-tipo').value=tipo;
-  const be=document.getElementById('btn-tipo-e');
-  const bs=document.getElementById('btn-tipo-s');
-  if(tipo==='entrada'){
-    be.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #27500A;background:#27500A;color:#fff;font-weight:700;cursor:pointer;font-size:13px';
-    bs.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#555;font-weight:700;cursor:pointer;font-size:13px';
-  } else {
-    bs.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #C00;background:#C00;color:#fff;font-weight:700;cursor:pointer;font-size:13px';
-    be.style.cssText='flex:1;padding:10px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#555;font-weight:700;cursor:pointer;font-size:13px';
+function buscarActivos(){
+  const q = document.getElementById('mov-buscar').value.toLowerCase().trim();
+  const el = document.getElementById('mov-resultados');
+  if(q.length < 2){ el.style.display='none'; return; }
+
+  const filtrados = todosActivos.filter(a=>
+    (a.id||'').toLowerCase().includes(q) ||
+    (a.subtipo||'').toLowerCase().includes(q) ||
+    (a.marca||'').toLowerCase().includes(q) ||
+    (a.modelo||'').toLowerCase().includes(q) ||
+    (a.serie||'').toLowerCase().includes(q)
+  ).slice(0,10);
+
+  if(!filtrados.length){
+    el.innerHTML='<div style="padding:12px;color:#999;font-size:13px;text-align:center">Sin resultados</div>';
+    el.style.display='block'; return;
   }
+
+  el.innerHTML = filtrados.map(a=>`
+    <div onclick="seleccionarActivo('${a.id}')"
+      style="padding:10px 14px;cursor:pointer;border-bottom:1px solid #f0f0f0;transition:background 0.1s"
+      onmouseover="this.style.background='#f0f7f4'" onmouseout="this.style.background='#fff'">
+      <div style="font-weight:700;color:#1F3864;font-size:13px">${a.id} — ${a.subtipo||''}</div>
+      <div style="font-size:12px;color:#555">${a.marca||''} ${a.modelo||''} ${a.serie?'· Serie: '+a.serie:''}</div>
+      <div style="font-size:11px;color:#888">${a.edificio||'Sin edificio'} ${a.sala?'— '+a.sala:''} · ${a.estado||'—'}</div>
+    </div>`).join('');
+  el.style.display='block';
 }
 
-async function buscarActivo(){
-  const id=document.getElementById('mov-activo-id').value.trim().toUpperCase();
-  const el=document.getElementById('mov-activo-info');
-  if(id.length<5){el.textContent='';return;}
-  const r=await fetch('/api/activos/'+id);
-  if(r.ok){
-    const d=await r.json();
-    const a=d.activo;
-    el.textContent=`✅ ${a.subtipo} ${a.marca} ${a.modelo} — ${a.edificio||'Sin edificio'}`;
-    el.style.color='#27500A';
-    if(a.responsable) document.getElementById('mov-resp').value=a.responsable;
-  } else {
-    el.textContent='❌ Activo no encontrado';
-    el.style.color='#C00';
-  }
+function seleccionarActivo(id){
+  const a = todosActivos.find(x=>x.id===id);
+  if(!a) return;
+  document.getElementById('mov-activo-id').value=id;
+  document.getElementById('mov-buscar').value='';
+  document.getElementById('mov-resultados').style.display='none';
+  document.getElementById('sel-id').textContent=a.id+' — '+(a.subtipo||'');
+  document.getElementById('sel-desc').textContent=(a.marca||'')+' '+(a.modelo||'')+(a.serie?' · Serie: '+a.serie:'');
+  document.getElementById('sel-ubicacion').textContent='📍 '+(a.edificio||'Sin edificio')+(a.sala?' — '+a.sala:'')+' · Estado: '+(a.estado||'—');
+  document.getElementById('mov-activo-sel').style.display='block';
+  document.getElementById('mov-form-datos').style.display='block';
+  document.getElementById('btn-guardar-mov').disabled=false;
+  if(a.responsable) document.getElementById('mov-resp').value=a.responsable;
+  if(a.edificio)    document.getElementById('mov-edificio').value=a.edificio;
+}
+
+function limpiarSeleccion(){
+  document.getElementById('mov-activo-id').value='';
+  document.getElementById('mov-activo-sel').style.display='none';
+  document.getElementById('mov-form-datos').style.display='none';
+  document.getElementById('btn-guardar-mov').disabled=true;
 }
 
 async function guardarMov(){
-  const aid=document.getElementById('mov-activo-id').value.trim().toUpperCase();
-  const desc=document.getElementById('mov-desc').value.trim();
-  if(!aid||!desc){alert('El ID del activo y la descripción son obligatorios');return;}
+  const aid = document.getElementById('mov-activo-id').value;
+  const motivo = document.getElementById('mov-motivo').value;
+  if(!aid){ alert('Selecciona un activo'); return; }
+  if(!motivo){ alert('Selecciona el motivo de salida'); return; }
+  const desc = motivo + (document.getElementById('mov-desc').value ? ' — '+document.getElementById('mov-desc').value : '');
   const data={
     activo_id:  aid,
-    tipo_mov:   document.getElementById('mov-tipo').value,
+    tipo_mov:   'salida',
     descripcion:desc,
     edificio:   document.getElementById('mov-edificio').value,
     responsable:document.getElementById('mov-resp').value,
@@ -329,19 +388,28 @@ async function guardarMov(){
   };
   const r=await fetch('/api/movimientos/activos',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   const d=await r.json();
-  if(d.ok){cerrarModal();cargar();}
+  if(d.ok){ cerrarModal(); cargar(); }
   else alert('Error: '+d.error);
 }
 
 async function eliminarMov(id){
-  if(!confirm('¿Eliminar este movimiento?')) return;
+  if(!confirm('¿Eliminar esta guía de salida?')) return;
   await fetch('/api/movimientos/activos/'+id,{method:'DELETE'});
   cargar();
 }
 
-function cerrarModal(){document.getElementById('modal-mov').classList.remove('show');}
+function cerrarModal(){
+  document.getElementById('modal-mov').classList.remove('show');
+  document.getElementById('mov-resultados').style.display='none';
+}
+
+// Cerrar resultados al hacer click fuera
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#mov-buscar') && !e.target.closest('#mov-resultados')){
+    document.getElementById('mov-resultados').style.display='none';
+  }
+});
 
 cargar();
 </script>
 </body>
-</html>
