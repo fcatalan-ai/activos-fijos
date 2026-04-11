@@ -113,6 +113,26 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
     <div class="filtro-badge" id="filtro-badge">Filtrando por: —</div>
   </div>
 
+  <!-- BOTÓN INFORME ANUAL -->
+  <div style="background:#fff;border-radius:10px;border:1px solid #e5e8ed;padding:16px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px">
+    <div>
+      <div style="font-weight:700;font-size:14px;color:#1F3864">📊 Informe Anual de Activos Fijos</div>
+      <div style="font-size:12px;color:#888;margin-top:3px">Exporta un Excel completo con inventario, depreciación, mantenciones y guías de salida</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <select id="anio-informe" style="padding:8px 12px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+        <option value="2023">2023</option>
+        <option value="2024">2024</option>
+        <option value="2025">2025</option>
+        <option value="2026" selected>2026</option>
+        <option value="2027">2027</option>
+      </select>
+      <button onclick="descargarInforme()" style="background:#1F3864;color:#fff;border:none;padding:9px 20px;border-radius:8px;font-size:14px;cursor:pointer;font-weight:600">
+        📥 Generar informe
+      </button>
+    </div>
+  </div>
+
   <!-- GRÁFICOS FILA 1 -->
   <div class="sec">Distribución del inventario</div>
   <div class="charts-3">
@@ -193,7 +213,12 @@ function limpiarFiltros(){
   document.getElementById('fil-subtipo').value='';
   document.getElementById('fil-edificio').value='';
   document.getElementById('filtro-badge').style.display='none';
-  cargarDashboard();
+  function descargarInforme(){
+  const anio = document.getElementById('anio-informe').value;
+  window.location = '/api/export/informe-anual?anio='+anio;
+}
+
+cargarDashboard();
 }
 
 async function cargarDashboard(){
@@ -357,6 +382,11 @@ async function cargarDashboard(){
         </div>`;
       }).join('')
     : '<div class="loading" style="padding:16px">No hay activos con depreciación ≥70%</div>';
+}
+
+function descargarInforme(){
+  const anio = document.getElementById('anio-informe').value;
+  window.location = '/api/export/informe-anual?anio='+anio;
 }
 
 cargarDashboard();
