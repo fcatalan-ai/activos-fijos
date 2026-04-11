@@ -339,101 +339,128 @@ def subir_foto(id):
 @admin_required
 def importar_excel():
     if 'archivo' not in request.files:
-        return jsonify({'error':'No se envió archivo'}), 400
+        return jsonify({'error':'No se envio archivo'}), 400
     file = request.files['archivo']
-    if not file.filename.endswith(('.xlsx','.xls')):
+    if not file.filename.lower().endswith(('.xlsx','.xls')):
         return jsonify({'error':'Solo se aceptan archivos Excel (.xlsx)'}), 400
     try:
         import openpyxl
-        wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
-        # Buscar hoja CARGA_ACTIVOS
+        data_bytes = file.read()
+        wb = openpyxl.load_workbook(io.BytesIO(data_bytes), data_only=True)
+
+        # Buscar la hoja correcta
         ws = None
         for name in wb.sheetnames:
-            if 'CARGA' in name.upper() or 'ACTIVO' in name.upper():
+            nu = name.upper()
+            if 'CARGA' in nu or ('ACTIVO' in nu and 'INSTRUC' not in nu):
                 ws = wb[name]; break
-        if not ws: ws = wb.active
+        if ws is None:
+            ws = wb.worksheets[0] if len(wb.worksheets)==1 else (wb.worksheets[1] if len(wb.worksheets)>1 else wb.active)
 
-        # Leer encabezados fila 3
-        headers = {}
-        for col in range(1, ws.max_column+1):
-            val = ws.cell(row=3, column=col).value
-            if val:
-                headers[str(val).strip().lower().replace('\n',' ')] = col
-
-        # Mapeo flexible de columnas
-        def get_col(keys):
-            for k in keys:
-                for h,c in headers.items():
-                    if k in h: return c
-            return None
-
-        col_map = {
-            'tipo':        get_col(['tipo']),
-            'subtipo':     get_col(['subtipo']),
-            'marca':       get_col(['marca']),
-            'modelo':      get_col(['modelo']),
-            'serie':       get_col(['serie','n° serie','numero']),
-            'estado':      get_col(['estado']),
-            'edificio':    get_col(['edificio']),
-            'sala':        get_col(['sala','dependencia']),
-            'responsable': get_col(['responsable']),
-            'fecha_compra':get_col(['fecha']),
-            'precio':      get_col(['precio']),
-            'documento':   get_col(['documento','factura']),
-            'vida_util':   get_col(['vida','útil','util']),
-            'observaciones':get_col(['observacion','obs']),
+        # Detectar fila de encabezados (buscar en filas 1-5)
+        header_row = None
+        col_map = {}
+        BUSCAR = {
+            'tipo':['tipo'],
+            'subtipo':['subtipo'],
+            'marca':['marca'],
+            'modelo':['modelo'],
+            'serie':['serie','n serie','num'],
+            'estado':['estado'],
+            'edificio':['edificio'],
+            'sala':['sala','dependencia'],
+            'responsable':['responsable'],
+            'fecha_compra':['fecha'],
+            'precio':['precio'],
+            'documento':['documento','factura','doc'],
+            'vida_util':['vida','util'],
+            'observaciones':['observacion','obs'],
         }
+        for fila in range(1, 6):
+            for col in range(1, ws.max_column+1):
+                v = ws.cell(row=fila, column=col).value
+                if not v: continue
+                vs = str(v).lower().replace('\n',' ').replace('*','').strip()
+                for campo, claves in BUSCAR.items():
+                    if campo not in col_map:
+                        for clave in claves:
+                            if clave in vs:
+                                col_map[campo] = col
+                                header_row = fila
+                                break
+        if not header_row:
+            return jsonify({'error':'No se encontraron encabezados en el archivo. Asegurate de usar la plantilla oficial.'}), 400
+
+        data_start = header_row + 1
+
+        def get_val(row_num, campo):
+            col = col_map.get(campo)
+            if not col: return ''
+            v = ws.cell(row=row_num, column=col).value
+            if v is None: return ''
+            return str(v).strip()
 
         creados = 0
+        omitidos = 0
         errores = []
-        # Datos desde fila 4
-        for row_num in range(4, ws.max_row+1):
-            def cell_val(col):
-                if not col: return ''
-                v = ws.cell(row=row_num, column=col).value
-                return str(v).strip() if v is not None else ''
 
-            tipo     = cell_val(col_map['tipo'])
-            subtipo  = cell_val(col_map['subtipo'])
-            edificio = cell_val(col_map['edificio'])
-            estado   = cell_val(col_map['estado']) or 'Bueno'
+        for row_num in range(data_start, ws.max_row + 1):
+            tipo     = get_val(row_num, 'tipo')
+            subtipo  = get_val(row_num, 'subtipo')
+            edificio = get_val(row_num, 'edificio')
 
-            # Saltar filas vacías o sin campos obligatorios
-            if not tipo or not subtipo or not edificio:
+            # Fila vacia
+            if not tipo and not subtipo:
+                omitidos += 1
                 continue
-            # Saltar si parece fila de ejemplo
-            if 'ejemplo' in (tipo+subtipo).lower():
+            # Fila de ejemplo
+            if any(x in (tipo+subtipo).lower() for x in ['ejemplo','example','muestra','test']):
+                omitidos += 1
+                continue
+            # Faltan obligatorios
+            if not tipo or not subtipo or not edificio:
+                errores.append(f"Fila {row_num}: faltan campos obligatorios (Tipo={tipo!r}, Subtipo={subtipo!r}, Edificio={edificio!r})")
                 continue
 
             try:
-                precio_raw = cell_val(col_map['precio'])
-                precio = float(str(precio_raw).replace('.','').replace(',','.')) if precio_raw else 0
+                estado = get_val(row_num, 'estado') or 'Bueno'
+                if estado not in ('Bueno','Regular','Malo'): estado = 'Bueno'
 
-                vida_raw = cell_val(col_map['vida_util'])
-                vida = int(float(vida_raw)) if vida_raw else VIDA_UTIL_SII.get(tipo, 7)
+                precio_raw = get_val(row_num, 'precio')
+                try:
+                    precio = float(str(precio_raw).replace('.','').replace(',','.').replace('$','').strip()) if precio_raw else 0
+                except: precio = 0
 
-                fecha = cell_val(col_map['fecha_compra'])
+                vida_raw = get_val(row_num, 'vida_util')
+                try: vida = int(float(vida_raw)) if vida_raw else VIDA_UTIL_SII.get(tipo, 7)
+                except: vida = VIDA_UTIL_SII.get(tipo, 7)
 
                 aid = next_id()
-                db_execute('''INSERT INTO activos
+                db_execute(
+                    '''INSERT INTO activos
                     (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,
                      responsable,fecha_compra,precio,documento,vida_util,observaciones,foto)
                     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
                     (aid, tipo, subtipo,
-                     cell_val(col_map['marca']), cell_val(col_map['modelo']),
-                     cell_val(col_map['serie']), estado, edificio,
-                     cell_val(col_map['sala']), cell_val(col_map['responsable']),
-                     fecha, precio, cell_val(col_map['documento']),
-                     vida, cell_val(col_map['observaciones']), ''))
-                db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                           (aid,'Alta',f'Importado desde Excel por {session["user"]}',session['user']))
+                     get_val(row_num,'marca'), get_val(row_num,'modelo'),
+                     get_val(row_num,'serie'), estado, edificio,
+                     get_val(row_num,'sala'), get_val(row_num,'responsable'),
+                     get_val(row_num,'fecha_compra'), precio,
+                     get_val(row_num,'documento'), vida,
+                     get_val(row_num,'observaciones'), ''))
+                db_execute(
+                    "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                    (aid,'Alta',f'Importado desde Excel — fila {row_num}',session['user']))
                 creados += 1
             except Exception as e:
                 errores.append(f"Fila {row_num}: {str(e)}")
 
-        return jsonify({'ok':True,'creados':creados,'errores':errores})
+        msg = f"{creados} activos importados"
+        if omitidos: msg += f", {omitidos} filas omitidas (vacias o ejemplos)"
+        return jsonify({'ok':True,'creados':creados,'errores':errores,'mensaje':msg})
+
     except Exception as e:
-        return jsonify({'error':str(e)}), 500
+        return jsonify({'error':f'Error procesando archivo: {str(e)}'}), 500
 
 @app.route('/api/activos/<id>/qr')
 @login_required
