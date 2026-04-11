@@ -111,8 +111,12 @@ const FMT = n => '$' + Math.round(n).toLocaleString('es-CL');
 const COLORS = ['#2E74B5','#70AD47','#ED7D31','#7030A0','#C00','#00B0F0','#FFC000','#43682B'];
 
 async function cargarDashboard(){
-  const r = await fetch('/api/kpis');
+  const [r, r2] = await Promise.all([
+    fetch('/api/kpis'),
+    fetch('/api/kpis/subtipo')
+  ]);
   const d = await r.json();
+  const sub = await r2.json();
 
   // KPIs
   document.getElementById('k-total').textContent = d.totales?.total ?? 0;
