@@ -114,8 +114,9 @@ tr:hover td{background:#f8fafc}
       <option value="">Todos los edificios</option>
       <option>Básica</option><option>Media</option><option>Parvularia</option>
     </select>
-    <button class="btn-export" onclick="window.location='/api/export/excel'">📥 Excel</button>
+    <button class="btn-export" onclick="window.location='/api/export/excel'">📥 Exportar Excel</button>
     {% if rol == 'admin' %}
+    <button class="btn-export" style="color:#27500A;border-color:#27500A" onclick="abrirModalImportar()">📤 Importar Excel</button>
     <button class="btn-new" onclick="abrirModalNuevo()">+ Nuevo activo</button>
     {% endif %}
   </div>
@@ -147,6 +148,7 @@ tr:hover td{background:#f8fafc}
       <button class="tab active" onclick="showTab('ficha',this)">Ficha</button>
       <button class="tab" onclick="showTab('foto',this)">Foto</button>
       <button class="tab" onclick="showTab('historial',this)">Historial</button>
+      <button class="tab" onclick="showTab('dep',this)">📉 Depreciación</button>
       <button class="tab" onclick="showTab('qr',this)">QR / Código</button>
     </div>
 
@@ -193,6 +195,11 @@ tr:hover td{background:#f8fafc}
       </div>
       <div id="foto-status" style="font-size:12px;color:#666;margin-top:8px;text-align:center"></div>
       {% endif %}
+    </div>
+
+    <div id="tab-dep" style="display:none">
+      <div class="section-lbl">Depreciación según SII</div>
+      <div id="dep-contenido"><div class="loading">Sin datos de depreciación</div></div>
     </div>
 
     <div id="tab-historial" style="display:none">
@@ -258,6 +265,32 @@ tr:hover td{background:#f8fafc}
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-activo')">Cancelar</button>
       <button class="btn-save" onclick="guardarActivo()">Guardar activo</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL IMPORTAR EXCEL -->
+<div class="modal-bg" id="modal-importar">
+  <div class="modal" style="max-width:500px">
+    <h3 style="color:#27500A">📤 Importar Activos desde Excel</h3>
+    <p style="font-size:13px;color:#555;margin-bottom:16px">Sube la plantilla Excel completada para cargar todos los activos de una vez.</p>
+    <div style="background:#E2EFDA;border:1px solid #70AD47;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#27500A">
+      ✅ Usa la plantilla oficial <strong>PLANTILLA_CARGA_ACTIVOS.xlsx</strong><br>
+      ✅ Completa la hoja <strong>CARGA_ACTIVOS</strong><br>
+      ✅ Los campos Tipo, Estado y Edificio deben usar las listas desplegables<br>
+      ✅ Deja la columna ID vacía — se asigna automáticamente
+    </div>
+    <div class="foto-upload-area" onclick="document.getElementById('excel-input').click()" id="excel-drop-area">
+      <input type="file" id="excel-input" accept=".xlsx,.xls" onchange="previewExcel()">
+      <div class="foto-upload-label" id="excel-label">📊 <span>Haz click para seleccionar el archivo Excel</span><br>
+      <small style="color:#999">.xlsx o .xls — máx 10MB</small></div>
+    </div>
+    <div id="import-preview" style="display:none;margin-top:12px;background:#f8fafc;border-radius:8px;padding:12px;font-size:13px"></div>
+    <div id="import-status" style="font-size:13px;margin-top:10px;text-align:center"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="cerrarModal('modal-importar')">Cancelar</button>
+      <button class="btn-save" style="background:#27500A" id="btn-importar" onclick="ejecutarImport()" disabled>Importar activos</button>
     </div>
   </div>
 </div>
@@ -378,6 +411,7 @@ async function abrirPanel(id){
       <div class="hist-txt">${m.descripcion}</div>
       <div class="hist-date">${m.fecha} — ${m.usuario}</div></div></div>`).join('')
     :'<div class="loading">Sin movimientos registrados</div>';
+  renderDepreciacion(d.depreciacion);
   cargarQR(id);
   drawBarcode(id);
   showTab('ficha',document.querySelector('.tab'));
@@ -421,7 +455,7 @@ function cerrarPanel(){
 }
 
 function showTab(tab,btn){
-  ['ficha','foto','historial','qr'].forEach(t=>
+  ['ficha','foto','dep','historial','qr'].forEach(t=>
     document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
@@ -535,6 +569,92 @@ async function guardarTraslado(){
   cerrarModal('modal-traslado');
   cargarStats(); filtrar();
   abrirPanel(activoActual.id);
+}
+
+
+function renderDepreciacion(dep){
+  const el = document.getElementById('dep-contenido');
+  if(!dep){ el.innerHTML='<div class="loading">Sin fecha de compra o precio registrado</div>'; return; }
+  const color = dep.estado_dep==='Depreciado'?'#791F1F':dep.estado_dep==='Crítico'?'#C00':dep.estado_dep==='Avanzado'?'#ED7D31':'#27500A';
+  const bgBar = dep.estado_dep==='Depreciado'?'#FCEBEB':dep.estado_dep==='Crítico'?'#FCEBEB':dep.estado_dep==='Avanzado'?'#FCE4D6':'#E2EFDA';
+  el.innerHTML = `
+    <div style="background:${bgBar};border-radius:8px;padding:12px;margin-bottom:12px;text-align:center">
+      <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em">Estado depreciación</div>
+      <div style="font-size:20px;font-weight:700;color:${color};margin:4px 0">${dep.estado_dep}</div>
+      <div style="font-size:13px;color:#555">${dep.porcentaje_dep}% depreciado</div>
+      <div style="background:#ddd;border-radius:10px;height:10px;margin:8px 0;overflow:hidden">
+        <div style="background:${color};width:${Math.min(100,dep.porcentaje_dep)}%;height:100%;border-radius:10px;transition:width 0.5s"></div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Precio original</div>
+        <div style="font-size:15px;font-weight:700;color:#1F3864">$${dep.precio_original.toLocaleString('es-CL')}</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Valor actual</div>
+        <div style="font-size:15px;font-weight:700;color:${color}">$${dep.valor_actual.toLocaleString('es-CL')}</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Depreciado</div>
+        <div style="font-size:15px;font-weight:700;color:#791F1F">$${dep.depreciacion_acum.toLocaleString('es-CL')}</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Valor residual</div>
+        <div style="font-size:14px;font-weight:700;color:#888">$${dep.valor_residual.toLocaleString('es-CL')}</div>
+      </div>
+    </div>
+    <div style="font-size:12px;color:#666;background:#f8fafc;border-radius:8px;padding:10px;border:1px solid #e5e8ed">
+      <div style="margin-bottom:4px">📅 <strong>Vida útil SII:</strong> ${dep.vida_util} años (${dep.tasa_anual}% anual)</div>
+      <div style="margin-bottom:4px">⏱️ <strong>Años transcurridos:</strong> ${dep.anos_transcurridos} años</div>
+      <div style="margin-bottom:4px">⏳ <strong>Años restantes:</strong> ${dep.anos_restantes} años</div>
+      <div>📆 <strong>Término vida útil:</strong> ${dep.fecha_termino}</div>
+    </div>
+  `;
+}
+
+let archivoExcel = null;
+function abrirModalImportar(){
+  archivoExcel=null;
+  document.getElementById('excel-label').innerHTML='📊 <span>Haz click para seleccionar el archivo Excel</span><br><small style="color:#999">.xlsx o .xls — máx 10MB</small>';
+  document.getElementById('import-preview').style.display='none';
+  document.getElementById('import-status').textContent='';
+  document.getElementById('btn-importar').disabled=true;
+  document.getElementById('modal-importar').classList.add('show');
+}
+
+function previewExcel(){
+  const file = document.getElementById('excel-input').files[0];
+  if(!file) return;
+  archivoExcel = file;
+  document.getElementById('excel-label').innerHTML=`✅ <span>${file.name}</span><br><small style="color:#27500A">${(file.size/1024).toFixed(0)} KB — listo para importar</small>`;
+  document.getElementById('import-preview').style.display='block';
+  document.getElementById('import-preview').innerHTML=`<strong>Archivo seleccionado:</strong> ${file.name}<br>Haz click en "Importar activos" para procesar.`;
+  document.getElementById('btn-importar').disabled=false;
+}
+
+async function ejecutarImport(){
+  if(!archivoExcel) return;
+  const status = document.getElementById('import-status');
+  const btn = document.getElementById('btn-importar');
+  btn.disabled=true; btn.textContent='Importando...';
+  status.textContent='⏳ Procesando archivo...';
+  const fd = new FormData();
+  fd.append('archivo', archivoExcel);
+  try {
+    const r = await fetch('/api/importar',{method:'POST',body:fd});
+    const d = await r.json();
+    if(d.ok){
+      status.innerHTML=`✅ <strong>${d.creados} activos importados correctamente</strong>${d.errores.length?'<br>⚠️ '+d.errores.join('<br>'):''}`;
+      setTimeout(()=>{cerrarModal('modal-importar');cargarStats();filtrar();},2000);
+    } else {
+      status.innerHTML=`❌ Error: ${d.error}`;
+      btn.disabled=false; btn.textContent='Importar activos';
+    }
+  } catch(e){
+    status.innerHTML=`❌ Error de conexión`;
+    btn.disabled=false; btn.textContent='Importar activos';
+  }
 }
 
 function confirmarEliminar(){
