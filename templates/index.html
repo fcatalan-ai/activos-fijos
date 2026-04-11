@@ -36,7 +36,6 @@ tr:hover td{background:#f8fafc}
 .badge-tipo{background:#E6F1FB;color:#0C447C}
 .btn-sm{padding:4px 10px;border-radius:6px;font-size:11px;cursor:pointer;border:1px solid #ddd;background:#f8f8f8}
 .btn-sm:hover{background:#e8ecf0}
-/* PANEL LATERAL */
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,0.35);z-index:99;display:none}
 .overlay.show{display:block}
 .panel{position:fixed;top:0;right:-480px;width:460px;max-width:100vw;height:100vh;background:#fff;border-left:1px solid #e0e4e9;overflow-y:auto;transition:right 0.25s;z-index:100;display:flex;flex-direction:column}
@@ -58,7 +57,6 @@ tr:hover td{background:#f8fafc}
 .hist-txt{font-size:12px;color:#333}
 .hist-date{font-size:11px;color:#999;margin-top:1px}
 .hist-tipo{font-size:10px;font-weight:700;color:#2E74B5;text-transform:uppercase}
-/* MODAL */
 .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,0.45);z-index:200;display:none;align-items:center;justify-content:center}
 .modal-bg.show{display:flex}
 .modal{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:560px;max-height:90vh;overflow-y:auto;margin:16px}
@@ -71,16 +69,22 @@ tr:hover td{background:#f8fafc}
 .btn-cancel{padding:8px 18px;border-radius:7px;border:1px solid #ddd;background:#fff;cursor:pointer;font-size:13px}
 .btn-save{padding:8px 20px;border-radius:7px;border:none;background:#1F3864;color:#fff;cursor:pointer;font-size:13px}
 .btn-save:hover{background:#2E74B5}
-/* QR */
 .qr-box{background:#f8fafc;border-radius:8px;padding:16px;text-align:center;border:1px solid #e5e8ed}
 .qr-box img{max-width:160px;margin:0 auto 8px;display:block}
 .barcode-box{background:#f8fafc;border-radius:8px;padding:16px;text-align:center;border:1px solid #e5e8ed;margin-top:10px}
 .section-lbl{font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px}
 .loading{text-align:center;padding:40px;color:#999;font-size:14px}
+/* FOTO */
+.foto-preview{width:100%;max-height:220px;object-fit:cover;border-radius:8px;margin-bottom:10px;border:1px solid #e5e8ed}
+.foto-upload-area{border:2px dashed #ddd;border-radius:8px;padding:20px;text-align:center;cursor:pointer;transition:border-color 0.2s;background:#fafafa}
+.foto-upload-area:hover{border-color:#2E74B5;background:#f0f7ff}
+.foto-upload-area input[type=file]{display:none}
+.foto-upload-label{font-size:13px;color:#666;cursor:pointer}
+.foto-upload-label span{color:#2E74B5;font-weight:600}
+.foto-thumb{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #ddd;vertical-align:middle}
 </style>
 </head>
 <body>
-
 <div class="topbar">
   <h1>🏫 Activos Fijos — Colegio</h1>
   <div class="topbar-right">
@@ -96,16 +100,11 @@ tr:hover td{background:#f8fafc}
     <div class="stat"><div class="stat-n">—</div><div class="stat-l">Cargando...</div></div>
     <div class="stat"><div class="stat-n">—</div><div class="stat-l">Cargando...</div></div>
   </div>
-
   <div class="toolbar">
     <input type="text" id="buscar" placeholder="Buscar por ID, marca, modelo, N° serie, responsable..." oninput="filtrar()">
     <select id="f-tipo" onchange="filtrar()">
       <option value="">Todos los tipos</option>
-      <option>Equipamiento Tecnológico</option>
-      <option>Mobiliario</option>
-      <option>Equipamiento Deportivo</option>
-      <option>Equipamiento Audiovisual</option>
-      <option>Otro</option>
+      {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
     </select>
     <select id="f-estado" onchange="filtrar()">
       <option value="">Todos los estados</option>
@@ -120,31 +119,21 @@ tr:hover td{background:#f8fafc}
     <button class="btn-new" onclick="abrirModalNuevo()">+ Nuevo activo</button>
     {% endif %}
   </div>
-
   <div class="table-wrap">
     <table>
       <thead>
         <tr>
-          <th>ID Activo</th>
-          <th>Subtipo</th>
-          <th>Marca / Modelo</th>
-          <th>N° Serie</th>
-          <th>Estado</th>
-          <th>Edificio / Sala</th>
-          <th>Responsable</th>
-          <th>Precio</th>
-          <th></th>
+          <th>Foto</th><th>ID Activo</th><th>Subtipo</th><th>Marca / Modelo</th>
+          <th>N° Serie</th><th>Estado</th><th>Edificio / Sala</th><th>Responsable</th><th>Precio</th><th></th>
         </tr>
       </thead>
-      <tbody id="tabla-body"><tr><td colspan="9" class="loading">Cargando activos...</td></tr></tbody>
+      <tbody id="tabla-body"><tr><td colspan="10" class="loading">Cargando activos...</td></tr></tbody>
     </table>
   </div>
 </div>
 
-<!-- OVERLAY -->
 <div class="overlay" id="overlay" onclick="cerrarPanel()"></div>
 
-<!-- PANEL LATERAL -->
 <div class="panel" id="panel">
   <div class="panel-head">
     <div>
@@ -156,6 +145,7 @@ tr:hover td{background:#f8fafc}
   <div class="panel-body">
     <div class="tabs">
       <button class="tab active" onclick="showTab('ficha',this)">Ficha</button>
+      <button class="tab" onclick="showTab('foto',this)">Foto</button>
       <button class="tab" onclick="showTab('historial',this)">Historial</button>
       <button class="tab" onclick="showTab('qr',this)">QR / Código</button>
     </div>
@@ -191,6 +181,19 @@ tr:hover td{background:#f8fafc}
       {% endif %}
     </div>
 
+    <div id="tab-foto" style="display:none">
+      <div class="section-lbl">Foto del activo</div>
+      <div id="foto-contenido"></div>
+      {% if rol == 'admin' %}
+      <div class="foto-upload-area" style="margin-top:12px" onclick="document.getElementById('foto-input').click()">
+        <input type="file" id="foto-input" accept="image/*" onchange="subirFoto()">
+        <div class="foto-upload-label">📷 <span>Haz click para subir foto</span><br>
+        <small style="color:#999">JPG, PNG, WEBP — máx 5MB</small></div>
+      </div>
+      <div id="foto-status" style="font-size:12px;color:#666;margin-top:8px;text-align:center"></div>
+      {% endif %}
+    </div>
+
     <div id="tab-historial" style="display:none">
       <div class="section-lbl">Movimientos registrados</div>
       <div id="hist-list"><div class="loading">Sin movimientos</div></div>
@@ -203,7 +206,7 @@ tr:hover td{background:#f8fafc}
         <div style="font-size:12px;color:#666;margin-bottom:8px" id="qr-url"></div>
         <a id="qr-download" href="#" download="qr.png"><button class="btn-sm">⬇️ Descargar QR</button></a>
       </div>
-      <div class="section-lbl" style="margin-top:14px">Código de barras (Code128)</div>
+      <div class="section-lbl" style="margin-top:14px">Código de barras</div>
       <div class="barcode-box">
         <svg id="barcode-svg" width="220" height="60"></svg>
         <div style="font-size:12px;color:#666;margin-top:4px" id="barcode-id"></div>
@@ -221,8 +224,7 @@ tr:hover td{background:#f8fafc}
       <div class="form-group"><label>ID (auto)</label><input id="m-id-display" readonly style="background:#f5f5f5"></div>
       <div class="form-group"><label>Tipo *</label>
         <select id="m-tipo">
-          <option>Equipamiento Tecnológico</option><option>Mobiliario</option>
-          <option>Equipamiento Deportivo</option><option>Equipamiento Audiovisual</option><option>Otro</option>
+          {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
         </select></div>
     </div>
     <div class="form-row">
@@ -279,8 +281,7 @@ tr:hover td{background:#f8fafc}
 
 <script>
 const ES_ADMIN = {{ 'true' if rol=='admin' else 'false' }};
-let activos = [];
-let activoActual = null;
+let activos = [], activoActual = null;
 
 async function cargarStats(){
   const r = await fetch('/api/stats');
@@ -289,8 +290,7 @@ async function cargarStats(){
     <div class="stat"><div class="stat-n">${d.total}</div><div class="stat-l">Total activos</div></div>
     <div class="stat"><div class="stat-n" style="color:#27500A">${d.buenos}</div><div class="stat-l">En buen estado</div></div>
     <div class="stat"><div class="stat-n" style="color:#791F1F">${d.malos}</div><div class="stat-l">En mal estado</div></div>
-    <div class="stat"><div class="stat-n" style="font-size:18px">$${Math.round(d.valor/1000000*10)/10}M</div><div class="stat-l">Valor total</div></div>
-  `;
+    <div class="stat"><div class="stat-n" style="font-size:18px">$${Math.round(d.valor/1000000*10)/10}M</div><div class="stat-l">Valor total</div></div>`;
 }
 
 async function cargarActivos(params=''){
@@ -300,23 +300,23 @@ async function cargarActivos(params=''){
 }
 
 function filtrar(){
-  const q = document.getElementById('buscar').value;
-  const tipo = document.getElementById('f-tipo').value;
-  const estado = document.getElementById('f-estado').value;
-  const edificio = document.getElementById('f-edificio').value;
-  const p = new URLSearchParams({q,tipo,estado,edificio});
-  cargarActivos(p.toString());
+  const q=document.getElementById('buscar').value;
+  const tipo=document.getElementById('f-tipo').value;
+  const estado=document.getElementById('f-estado').value;
+  const edificio=document.getElementById('f-edificio').value;
+  cargarActivos(new URLSearchParams({q,tipo,estado,edificio}).toString());
 }
 
-const eB = {Bueno:'badge-bueno',Regular:'badge-regular',Malo:'badge-malo'};
+const eB={Bueno:'badge-bueno',Regular:'badge-regular',Malo:'badge-malo'};
 
 function renderTabla(){
   if(!activos.length){
-    document.getElementById('tabla-body').innerHTML='<tr><td colspan="9" class="loading">No se encontraron activos</td></tr>';
+    document.getElementById('tabla-body').innerHTML='<tr><td colspan="10" class="loading">No se encontraron activos</td></tr>';
     return;
   }
-  document.getElementById('tabla-body').innerHTML = activos.map(a=>`
+  document.getElementById('tabla-body').innerHTML=activos.map(a=>`
     <tr>
+      <td>${a.foto?`<img src="${a.foto}" class="foto-thumb" alt="foto">`:'<span style="color:#ccc;font-size:18px">📷</span>'}</td>
       <td style="font-weight:700;color:#1F3864">${a.id}</td>
       <td><span class="badge badge-tipo">${a.subtipo||'—'}</span></td>
       <td>${a.marca||''} ${a.modelo||''}</td>
@@ -326,78 +326,75 @@ function renderTabla(){
       <td style="font-size:12px">${a.responsable||'—'}</td>
       <td style="font-size:12px">$${(a.precio||0).toLocaleString('es-CL')}</td>
       <td><button class="btn-sm" onclick="abrirPanel('${a.id}')">Ver ficha</button></td>
-    </tr>
-  `).join('');
+    </tr>`).join('');
 }
 
 async function abrirPanel(id){
-  activoActual = null;
-  const r = await fetch('/api/activos/'+id);
-  const d = await r.json();
-  const a = d.activo;
-  activoActual = a;
-
-  document.getElementById('p-id').textContent = a.id;
-  document.getElementById('p-sub').textContent = (a.subtipo||'') + ' — ' + (a.marca||'');
-  document.getElementById('p-tipo').textContent = a.tipo||'—';
-  document.getElementById('p-subtipo').textContent = a.subtipo||'—';
-  document.getElementById('p-marca').textContent = a.marca||'—';
-  document.getElementById('p-modelo').textContent = a.modelo||'—';
-  document.getElementById('p-serie').textContent = a.serie||'—';
-  document.getElementById('p-vida').textContent = (a.vida_util||'—') + ' años';
-  document.getElementById('p-estado').innerHTML = `<span class="badge ${eB[a.estado]||''}">${a.estado||'—'}</span>`;
-  document.getElementById('p-edificio').textContent = a.edificio||'—';
-  document.getElementById('p-sala').textContent = a.sala||'—';
-  document.getElementById('p-resp').textContent = a.responsable||'—';
-  document.getElementById('p-fecha').textContent = a.fecha_compra||'—';
-  document.getElementById('p-precio').textContent = '$'+(a.precio||0).toLocaleString('es-CL');
-  document.getElementById('p-doc').textContent = a.documento||'—';
-  document.getElementById('p-obs').textContent = a.observaciones||'Sin observaciones';
-
+  activoActual=null;
+  const r=await fetch('/api/activos/'+id);
+  const d=await r.json();
+  const a=d.activo;
+  activoActual=a;
+  document.getElementById('p-id').textContent=a.id;
+  document.getElementById('p-sub').textContent=(a.subtipo||'')+' — '+(a.marca||'');
+  document.getElementById('p-tipo').textContent=a.tipo||'—';
+  document.getElementById('p-subtipo').textContent=a.subtipo||'—';
+  document.getElementById('p-marca').textContent=a.marca||'—';
+  document.getElementById('p-modelo').textContent=a.modelo||'—';
+  document.getElementById('p-serie').textContent=a.serie||'—';
+  document.getElementById('p-vida').textContent=(a.vida_util||'—')+' años';
+  document.getElementById('p-estado').innerHTML=`<span class="badge ${eB[a.estado]||''}">${a.estado||'—'}</span>`;
+  document.getElementById('p-edificio').textContent=a.edificio||'—';
+  document.getElementById('p-sala').textContent=a.sala||'—';
+  document.getElementById('p-resp').textContent=a.responsable||'—';
+  document.getElementById('p-fecha').textContent=a.fecha_compra||'—';
+  document.getElementById('p-precio').textContent='$'+(a.precio||0).toLocaleString('es-CL');
+  document.getElementById('p-doc').textContent=a.documento||'—';
+  document.getElementById('p-obs').textContent=a.observaciones||'Sin observaciones';
+  // Foto
+  renderFotoPanel(a.foto);
   // Historial
-  document.getElementById('hist-list').innerHTML = d.movimientos.length
-    ? d.movimientos.map(m=>`
-        <div class="hist-item">
-          <div class="hist-dot"></div>
-          <div>
-            <div class="hist-tipo">${m.tipo}</div>
-            <div class="hist-txt">${m.descripcion}</div>
-            <div class="hist-date">${m.fecha} — ${m.usuario}</div>
-          </div>
-        </div>`).join('')
-    : '<div class="loading">Sin movimientos registrados</div>';
-
-  // QR
+  document.getElementById('hist-list').innerHTML=d.movimientos.length
+    ?d.movimientos.map(m=>`<div class="hist-item"><div class="hist-dot"></div><div>
+      <div class="hist-tipo">${m.tipo}</div>
+      <div class="hist-txt">${m.descripcion}</div>
+      <div class="hist-date">${m.fecha} — ${m.usuario}</div></div></div>`).join('')
+    :'<div class="loading">Sin movimientos registrados</div>';
   cargarQR(id);
   drawBarcode(id);
-
-  showTab('ficha', document.querySelector('.tab'));
+  showTab('ficha',document.querySelector('.tab'));
   document.getElementById('panel').classList.add('open');
   document.getElementById('overlay').classList.add('show');
 }
 
-async function cargarQR(id){
-  const r = await fetch('/api/activos/'+id+'/qr');
-  const d = await r.json();
-  const img = document.getElementById('qr-img');
-  img.src = 'data:image/png;base64,'+d.qr;
-  document.getElementById('qr-url').textContent = d.url;
-  document.getElementById('qr-download').href = 'data:image/png;base64,'+d.qr;
-  document.getElementById('qr-download').download = id+'_QR.png';
+function renderFotoPanel(foto){
+  const el=document.getElementById('foto-contenido');
+  if(foto){
+    el.innerHTML=`<img src="${foto}" class="foto-preview" alt="Foto del activo">
+      <div style="text-align:center"><a href="${foto}" download="activo.jpg"><button class="btn-sm">⬇️ Descargar foto</button></a></div>`;
+  } else {
+    el.innerHTML='<div class="loading" style="padding:20px">Sin foto registrada</div>';
+  }
 }
 
-function drawBarcode(text){
-  const svg = document.getElementById('barcode-svg');
-  document.getElementById('barcode-id').textContent = text;
-  let bars=''; let x=8;
-  const chars = text.padEnd(12,'0').substring(0,16);
-  for(let i=0;i<chars.length;i++){
-    const w = (chars.charCodeAt(i) % 3) + 1;
-    if(i%2===0) bars+=`<rect x="${x}" y="4" width="${w*3}" height="44" fill="#1a1a1a"/>`;
-    x += w*3+2;
+async function subirFoto(){
+  if(!activoActual) return;
+  const file=document.getElementById('foto-input').files[0];
+  if(!file) return;
+  const status=document.getElementById('foto-status');
+  status.textContent='Subiendo foto...';
+  const fd=new FormData();
+  fd.append('foto',file);
+  const r=await fetch('/api/activos/'+activoActual.id+'/foto',{method:'POST',body:fd});
+  const d=await r.json();
+  if(d.ok){
+    activoActual.foto=d.foto;
+    renderFotoPanel(d.foto);
+    status.textContent='✅ Foto actualizada correctamente';
+    filtrar();
+  } else {
+    status.textContent='❌ Error: '+d.error;
   }
-  bars += `<rect x="${x}" y="4" width="2" height="44" fill="#1a1a1a"/>`;
-  svg.innerHTML = bars;
 }
 
 function cerrarPanel(){
@@ -405,19 +402,40 @@ function cerrarPanel(){
   document.getElementById('overlay').classList.remove('show');
 }
 
-function showTab(tab, btn){
-  ['ficha','historial','qr'].forEach(t=>{
-    document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
-  });
+function showTab(tab,btn){
+  ['ficha','foto','historial','qr'].forEach(t=>
+    document.getElementById('tab-'+t).style.display=t===tab?'block':'none');
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   else document.querySelectorAll('.tab')[0].classList.add('active');
 }
 
+async function cargarQR(id){
+  const r=await fetch('/api/activos/'+id+'/qr');
+  const d=await r.json();
+  document.getElementById('qr-img').src='data:image/png;base64,'+d.qr;
+  document.getElementById('qr-url').textContent=d.url;
+  document.getElementById('qr-download').href='data:image/png;base64,'+d.qr;
+  document.getElementById('qr-download').download=id+'_QR.png';
+}
+
+function drawBarcode(text){
+  const svg=document.getElementById('barcode-svg');
+  document.getElementById('barcode-id').textContent=text;
+  let bars='',x=8;
+  for(let i=0;i<text.length;i++){
+    const w=(text.charCodeAt(i)%3)+1;
+    if(i%2===0) bars+=`<rect x="${x}" y="4" width="${w*3}" height="44" fill="#1a1a1a"/>`;
+    x+=w*3+2;
+  }
+  bars+=`<rect x="${x}" y="4" width="2" height="44" fill="#1a1a1a"/>`;
+  svg.innerHTML=bars;
+}
+
 function abrirModalNuevo(){
-  document.getElementById('modal-title').textContent = 'Nuevo Activo';
-  document.getElementById('m-id').value = '';
-  document.getElementById('m-id-display').value = 'Se asignará automáticamente';
+  document.getElementById('modal-title').textContent='Nuevo Activo';
+  document.getElementById('m-id').value='';
+  document.getElementById('m-id-display').value='Se asignará automáticamente';
   ['subtipo','marca','modelo','serie','sala','resp','doc','obs'].forEach(f=>
     document.getElementById('m-'+f).value='');
   document.getElementById('m-vida').value=4;
@@ -427,80 +445,77 @@ function abrirModalNuevo(){
 }
 
 function abrirModalEditar(){
-  if(!activoActual)return;
-  const a = activoActual;
-  document.getElementById('modal-title').textContent = 'Editar Activo — '+a.id;
-  document.getElementById('m-id').value = a.id;
-  document.getElementById('m-id-display').value = a.id;
-  document.getElementById('m-tipo').value = a.tipo||'';
-  document.getElementById('m-subtipo').value = a.subtipo||'';
-  document.getElementById('m-marca').value = a.marca||'';
-  document.getElementById('m-modelo').value = a.modelo||'';
-  document.getElementById('m-serie').value = a.serie||'';
-  document.getElementById('m-estado').value = a.estado||'Bueno';
-  document.getElementById('m-vida').value = a.vida_util||4;
-  document.getElementById('m-edificio').value = a.edificio||'Básica';
-  document.getElementById('m-sala').value = a.sala||'';
-  document.getElementById('m-resp').value = a.responsable||'';
-  document.getElementById('m-doc').value = a.documento||'';
-  document.getElementById('m-fecha').value = a.fecha_compra||'';
-  document.getElementById('m-precio').value = a.precio||'';
-  document.getElementById('m-obs').value = a.observaciones||'';
+  if(!activoActual) return;
+  const a=activoActual;
+  document.getElementById('modal-title').textContent='Editar Activo — '+a.id;
+  document.getElementById('m-id').value=a.id;
+  document.getElementById('m-id-display').value=a.id;
+  document.getElementById('m-tipo').value=a.tipo||'';
+  document.getElementById('m-subtipo').value=a.subtipo||'';
+  document.getElementById('m-marca').value=a.marca||'';
+  document.getElementById('m-modelo').value=a.modelo||'';
+  document.getElementById('m-serie').value=a.serie||'';
+  document.getElementById('m-estado').value=a.estado||'Bueno';
+  document.getElementById('m-vida').value=a.vida_util||4;
+  document.getElementById('m-edificio').value=a.edificio||'Básica';
+  document.getElementById('m-sala').value=a.sala||'';
+  document.getElementById('m-resp').value=a.responsable||'';
+  document.getElementById('m-doc').value=a.documento||'';
+  document.getElementById('m-fecha').value=a.fecha_compra||'';
+  document.getElementById('m-precio').value=a.precio||'';
+  document.getElementById('m-obs').value=a.observaciones||'';
   document.getElementById('modal-activo').classList.add('show');
 }
 
 function abrirModalTraslado(){
-  if(!activoActual)return;
-  const a = activoActual;
-  document.getElementById('t-info').textContent = `Activo: ${a.id} — Ubicación actual: ${a.sala||'—'} (${a.edificio||'—'})`;
-  document.getElementById('t-edificio').value = a.edificio||'Básica';
-  document.getElementById('t-sala').value = '';
-  document.getElementById('t-resp').value = a.responsable||'';
+  if(!activoActual) return;
+  const a=activoActual;
+  document.getElementById('t-info').textContent=`Activo: ${a.id} — Ubicación actual: ${a.sala||'—'} (${a.edificio||'—'})`;
+  document.getElementById('t-edificio').value=a.edificio||'Básica';
+  document.getElementById('t-sala').value='';
+  document.getElementById('t-resp').value=a.responsable||'';
   document.getElementById('modal-traslado').classList.add('show');
 }
 
 function cerrarModal(id){ document.getElementById(id).classList.remove('show'); }
 
 async function guardarActivo(){
-  const id = document.getElementById('m-id').value;
-  const data = {
-    tipo: document.getElementById('m-tipo').value,
-    subtipo: document.getElementById('m-subtipo').value,
-    marca: document.getElementById('m-marca').value,
-    modelo: document.getElementById('m-modelo').value,
-    serie: document.getElementById('m-serie').value,
-    estado: document.getElementById('m-estado').value,
-    vida_util: parseInt(document.getElementById('m-vida').value)||4,
-    edificio: document.getElementById('m-edificio').value,
-    sala: document.getElementById('m-sala').value,
-    responsable: document.getElementById('m-resp').value,
-    documento: document.getElementById('m-doc').value,
-    fecha_compra: document.getElementById('m-fecha').value,
-    precio: parseFloat(document.getElementById('m-precio').value)||0,
-    observaciones: document.getElementById('m-obs').value,
+  const id=document.getElementById('m-id').value;
+  const data={
+    tipo:document.getElementById('m-tipo').value,
+    subtipo:document.getElementById('m-subtipo').value,
+    marca:document.getElementById('m-marca').value,
+    modelo:document.getElementById('m-modelo').value,
+    serie:document.getElementById('m-serie').value,
+    estado:document.getElementById('m-estado').value,
+    vida_util:parseInt(document.getElementById('m-vida').value)||4,
+    edificio:document.getElementById('m-edificio').value,
+    sala:document.getElementById('m-sala').value,
+    responsable:document.getElementById('m-resp').value,
+    documento:document.getElementById('m-doc').value,
+    fecha_compra:document.getElementById('m-fecha').value,
+    precio:parseFloat(document.getElementById('m-precio').value)||0,
+    observaciones:document.getElementById('m-obs').value,
   };
-  const url = id ? '/api/activos/'+id : '/api/activos';
-  const method = id ? 'PUT' : 'POST';
-  const r = await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  const d = await r.json();
+  const url=id?'/api/activos/'+id:'/api/activos';
+  const r=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  const d=await r.json();
   cerrarModal('modal-activo');
-  cargarStats();
-  filtrar();
+  cargarStats(); filtrar();
   if(!id && d.id) abrirPanel(d.id);
 }
 
 async function guardarTraslado(){
-  if(!activoActual)return;
-  const data = {
-    edificio: document.getElementById('t-edificio').value,
-    sala: document.getElementById('t-sala').value,
-    responsable: document.getElementById('t-resp').value,
+  if(!activoActual) return;
+  const data={
+    edificio:document.getElementById('t-edificio').value,
+    sala:document.getElementById('t-sala').value,
+    responsable:document.getElementById('t-resp').value,
   };
   await fetch('/api/activos/'+activoActual.id+'/traslado',
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
   cerrarModal('modal-traslado');
-  cargarStats();
-  filtrar();
+  cargarStats(); filtrar();
   abrirPanel(activoActual.id);
 }
 
