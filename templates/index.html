@@ -91,6 +91,7 @@ tr:hover td{background:#f8fafc}
   <div class="topbar-right">
     <span>{{ user }} {% if rol=='admin' %}(Admin){% else %}(Consulta){% endif %}</span>
     <a href="/dashboard" style="color:#FFD966;font-weight:600">📊 Dashboard</a>
+    <a href="/movimientos" style="color:#9BB8D8">📋 Movimientos</a>
     <a href="/logout">Cerrar sesión</a>
   </div>
 </div>
@@ -264,7 +265,7 @@ tr:hover td{background:#f8fafc}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Edificio *</label>
-        <select id="m-edificio"><option>Básica</option><option>Media</option><option>Parvularia</option></select></div>
+        <select id="m-edificio"><option>Básica</option><option>Media</option><option>Parvularia</option><option>Administración</option></select></div>
       <div class="form-group"><label>Sala / Dependencia</label><input id="m-sala" placeholder="Ej: Lab. Informática, Sala 204"></div>
     </div>
     <div class="form-row">
@@ -361,7 +362,7 @@ tr:hover td{background:#f8fafc}
     <p style="font-size:13px;color:#666;margin-bottom:16px" id="t-info">—</p>
     <div class="form-row">
       <div class="form-group"><label>Nuevo edificio *</label>
-        <select id="t-edificio"><option>Básica</option><option>Media</option><option>Parvularia</option></select></div>
+        <select id="t-edificio"><option>Básica</option><option>Media</option><option>Parvularia</option><option>Administración</option></select></div>
       <div class="form-group"><label>Nueva sala *</label><input id="t-sala" placeholder="Sala / dependencia destino"></div>
     </div>
     <div class="form-group"><label>Nuevo responsable</label><input id="t-resp" placeholder="Nombre del responsable en destino"></div>
@@ -552,7 +553,7 @@ function abrirModalEditar(){
   document.getElementById('m-serie').value=a.serie||'';
   document.getElementById('m-estado').value=a.estado||'Bueno';
   document.getElementById('m-vida').value=a.vida_util||4;
-  document.getElementById('m-edificio').value=a.edificio||'Básica';
+  document.getElementById('m-edificio').value=a.edificio||'';
   document.getElementById('m-sala').value=a.sala||'';
   document.getElementById('m-resp').value=a.responsable||'';
   document.getElementById('m-doc').value=a.documento||'';
@@ -566,7 +567,7 @@ function abrirModalTraslado(){
   if(!activoActual) return;
   const a=activoActual;
   document.getElementById('t-info').textContent=`Activo: ${a.id} — Ubicación actual: ${a.sala||'—'} (${a.edificio||'—'})`;
-  document.getElementById('t-edificio').value=a.edificio||'Básica';
+  document.getElementById('t-edificio').value=a.edificio||'';
   document.getElementById('t-sala').value='';
   document.getElementById('t-resp').value=a.responsable||'';
   document.getElementById('modal-traslado').classList.add('show');
