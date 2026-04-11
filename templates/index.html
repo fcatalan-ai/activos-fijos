@@ -290,6 +290,7 @@ tr:hover td{background:#f8fafc}
     <div id="import-status" style="font-size:13px;margin-top:10px;text-align:center"></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-importar')">Cancelar</button>
+      <button class="btn-sm" id="btn-debug" onclick="debugExcel()" disabled style="color:#555">🔍 Diagnosticar</button>
       <button class="btn-save" style="background:#27500A" id="btn-importar" onclick="ejecutarImport()" disabled>Importar activos</button>
     </div>
   </div>
@@ -631,6 +632,30 @@ function previewExcel(){
   document.getElementById('import-preview').style.display='block';
   document.getElementById('import-preview').innerHTML=`<strong>Archivo seleccionado:</strong> ${file.name}<br>Haz click en "Importar activos" para procesar.`;
   document.getElementById('btn-importar').disabled=false;
+  document.getElementById('btn-debug').disabled=false;
+}
+
+async function debugExcel(){
+  if(!archivoExcel) return;
+  const status = document.getElementById('import-status');
+  status.textContent = '🔍 Analizando archivo...';
+  const fd = new FormData();
+  fd.append('archivo', archivoExcel);
+  const r = await fetch('/api/debug-excel',{method:'POST',body:fd});
+  const d = await r.json();
+  if(d.error){
+    status.innerHTML = `❌ Error: ${d.error}`;
+    return;
+  }
+  let html = `<strong>Hojas encontradas:</strong> ${d.hojas.join(', ')}<br>`;
+  html += `<strong>Hoja usada:</strong> ${d.hoja_usada}<br>`;
+  html += `<strong>Filas con datos:</strong> ${d.max_row}<br><br>`;
+  html += `<strong>Primeras 6 filas:</strong><br>`;
+  d.preview_filas_1_6.forEach((fila, i) => {
+    const contenido = fila.filter(v=>v).join(' | ');
+    if(contenido) html += `Fila ${i+1}: ${contenido}<br>`;
+  });
+  status.innerHTML = `<div style="background:#f8fafc;padding:10px;border-radius:6px;font-size:11px;text-align:left;border:1px solid #ddd;max-height:200px;overflow-y:auto">${html}</div>`;
 }
 
 async function ejecutarImport(){
@@ -645,15 +670,24 @@ async function ejecutarImport(){
     const r = await fetch('/api/importar',{method:'POST',body:fd});
     const d = await r.json();
     if(d.ok){
-      status.innerHTML=`✅ <strong>${d.creados} activos importados correctamente</strong>${d.errores.length?'<br>⚠️ '+d.errores.join('<br>'):''}`;
-      setTimeout(()=>{cerrarModal('modal-importar');cargarStats();filtrar();},2000);
+      const msg = d.creados>0
+        ? `✅ <strong>${d.creados} activos importados correctamente</strong>${d.errores.length?'<br>⚠️ Advertencias:<br>'+d.errores.slice(0,5).join('<br>'):''}`
+        : `⚠️ <strong>No se importó ningún activo.</strong><br>Verifica que la hoja se llame CARGA_ACTIVOS y que los datos estén desde la fila 4.${d.errores.length?'<br>Errores:<br>'+d.errores.slice(0,5).join('<br>'):''}`;
+      status.innerHTML = msg;
+      if(d.creados>0){
+        setTimeout(()=>{cerrarModal('modal-importar');cargarStats();filtrar();},3000);
+      } else {
+        btn.disabled=false;
+        btn.textContent='Importar activos';
+      }
     } else {
       status.innerHTML=`❌ Error: ${d.error}`;
       btn.disabled=false; btn.textContent='Importar activos';
     }
   } catch(e){
-    status.innerHTML=`❌ Error de conexión`;
-    btn.disabled=false; btn.textContent='Importar activos';
+    status.innerHTML=`❌ Error de conexión: ${e.message}`;
+    btn.disabled=false;
+    btn.textContent='Importar activos';
   }
 }
 
