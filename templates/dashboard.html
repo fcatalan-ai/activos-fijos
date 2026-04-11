@@ -111,9 +111,10 @@ const FMT = n => '$' + Math.round(n).toLocaleString('es-CL');
 const COLORS = ['#2E74B5','#70AD47','#ED7D31','#7030A0','#C00','#00B0F0','#FFC000','#43682B'];
 
 async function cargarDashboard(){
+  const params = new URLSearchParams(filtrosActivos||{});
   const [r, r2] = await Promise.all([
-    fetch('/api/kpis'),
-    fetch('/api/kpis/subtipo')
+    fetch('/api/kpis?'+params),
+    fetch('/api/kpis/subtipo?'+params)
   ]);
   const d = await r.json();
   const sub = await r2.json();
@@ -235,6 +236,38 @@ async function cargarDashboard(){
         </div>`;
       }).join('')
     : '<div class="loading" style="padding:16px">No hay activos con depreciación avanzada (&ge;70%)</div>';
+}
+
+
+let filtrosActivos = {};
+
+function aplicarFiltros(){
+  filtrosActivos = {
+    tipo:     document.getElementById('fil-tipo').value,
+    subtipo:  document.getElementById('fil-subtipo').value,
+    edificio: document.getElementById('fil-edificio').value,
+  };
+  const partes = [];
+  if(filtrosActivos.tipo)     partes.push(filtrosActivos.tipo.replace('Equipamiento ',''));
+  if(filtrosActivos.subtipo)  partes.push(filtrosActivos.subtipo);
+  if(filtrosActivos.edificio) partes.push(filtrosActivos.edificio);
+  const badge = document.getElementById('filtro-activo-badge');
+  if(partes.length){
+    badge.textContent = '🔍 '+partes.join(' · ');
+    badge.style.display='inline-block';
+  } else {
+    badge.style.display='none';
+  }
+  cargarDashboard();
+}
+
+function limpiarFiltros(){
+  document.getElementById('fil-tipo').value='';
+  document.getElementById('fil-subtipo').value='';
+  document.getElementById('fil-edificio').value='';
+  filtrosActivos={};
+  document.getElementById('filtro-activo-badge').style.display='none';
+  cargarDashboard();
 }
 
 cargarDashboard();
