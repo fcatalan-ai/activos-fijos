@@ -85,20 +85,13 @@ tr:hover td{background:#f8fafc}
 <div class="main">
   <div class="header-row">
     <div>
-      <h2>📋 Registro de Movimientos</h2>
-      <p style="font-size:13px;color:#888;margin-top:4px">Guías de entrada y salida de activos fijos</p>
+      <h2>📤 Guías de Salida — Activos Fijos</h2>
+      <p style="font-size:13px;color:#888;margin-top:4px">Registro de bajas, traslados definitivos y salidas de inventario</p>
     </div>
     <div style="display:flex;gap:8px">
-      <button class="btn-out" onclick="window.location='/api/export/movimientos'">📥 Exportar Excel</button>
-      <button class="btn-primary" onclick="abrirNuevoMov()">+ Nuevo movimiento</button>
+      <button class="btn-out" onclick="exportar()">📥 Exportar Excel</button>
+      <button class="btn-primary" onclick="abrirNuevoMov()">+ Nueva guía de salida</button>
     </div>
-  </div>
-
-  <!-- TABS TIPO -->
-  <div class="tipo-tabs">
-    <button class="tipo-tab tipo-tab-todos active" id="tab-todos" onclick="setTipo('')">📋 Todos</button>
-    <button class="tipo-tab tipo-tab-entrada" id="tab-entrada" onclick="setTipo('entrada')">📥 Guías de Entrada</button>
-    <button class="tipo-tab tipo-tab-salida" id="tab-salida" onclick="setTipo('salida')">📤 Guías de Salida</button>
   </div>
 
   <!-- FILTROS -->
@@ -135,8 +128,7 @@ tr:hover td{background:#f8fafc}
   <!-- MINI STATS -->
   <div class="mini-stats">
     <div class="mini-stat"><div class="mini-stat-n" id="ms-total">—</div><div class="mini-stat-l">Total movimientos</div></div>
-    <div class="mini-stat"><div class="mini-stat-n" id="ms-entradas" style="color:#27500A">—</div><div class="mini-stat-l">Guías entrada</div></div>
-    <div class="mini-stat"><div class="mini-stat-n" id="ms-salidas" style="color:#C00">—</div><div class="mini-stat-l">Guías salida</div></div>
+    <div class="mini-stat"><div class="mini-stat-n" id="ms-salidas" style="color:#C00">—</div><div class="mini-stat-l">Total guías salida</div></div>
     <div class="mini-stat"><div class="mini-stat-n" id="ms-export" style="font-size:13px;cursor:pointer;color:#2E74B5" onclick="exportar()">📥 Exportar</div><div class="mini-stat-l">Resultados actuales</div></div>
   </div>
 
@@ -162,18 +154,11 @@ tr:hover td{background:#f8fafc}
 <!-- MODAL NUEVO MOVIMIENTO -->
 <div class="modal-bg" id="modal-mov">
   <div class="modal">
-    <h3 id="mov-title">📋 Nuevo Movimiento</h3>
-    <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button onclick="setTipoMov('entrada')" id="btn-tipo-e"
-        style="flex:1;padding:10px;border-radius:8px;border:2px solid #70AD47;background:#E2EFDA;color:#27500A;font-weight:700;cursor:pointer;font-size:13px">
-        📥 Guía Entrada
-      </button>
-      <button onclick="setTipoMov('salida')" id="btn-tipo-s"
-        style="flex:1;padding:10px;border-radius:8px;border:2px solid #ddd;background:#fff;color:#555;font-weight:700;cursor:pointer;font-size:13px">
-        📤 Guía Salida
-      </button>
+    <h3>📤 Nueva Guía de Salida</h3>
+    <div style="background:#FCEBEB;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;color:#C00;font-weight:600">
+      📤 Guía de Salida — Baja o salida definitiva del inventario
     </div>
-    <input type="hidden" id="mov-tipo" value="entrada">
+    <input type="hidden" id="mov-tipo" value="salida">
     <div class="form-group" style="margin-bottom:10px">
       <label>ID Activo *</label>
       <input id="mov-activo-id" placeholder="Ej: AF-26-1000" oninput="buscarActivo()">
@@ -183,17 +168,16 @@ tr:hover td{background:#f8fafc}
       <div class="form-group"><label>Fecha *</label><input type="date" id="mov-fecha"></div>
       <div class="form-group"><label>Edificio destino</label>
         <select id="mov-edificio">
-          <option value="">Sin cambio</option>
+          <option value="">Sin especificar</option>
           <option>Básica</option><option>Media</option>
           <option>Parvularia</option><option>Administración</option>
-          <option>Baja</option><option>Reparación</option>
         </select>
       </div>
     </div>
     <div class="form-group" style="margin-bottom:10px">
       <label>Descripción / Motivo *</label>
       <textarea id="mov-desc" rows="3" style="width:100%;padding:8px;border:1px solid #ddd;border-radius:7px;font-size:13px;resize:vertical"
-        placeholder="Ej: Ingreso nuevo activo, Traslado por reemplazo, Baja por obsolescencia..."></textarea>
+        placeholder="Ej: Baja por obsolescencia, Pérdida, Daño irreparable, Donación..."></textarea>
     </div>
     <div class="form-group" style="margin-bottom:10px">
       <label>Responsable</label>
@@ -207,7 +191,7 @@ tr:hover td{background:#f8fafc}
 </div>
 
 <script>
-let tipoActual = '';
+let tipoActual = 'salida';
 let movimientos = [];
 let paginaActual = 1;
 const POR_PAGINA = 25;
@@ -247,9 +231,8 @@ function renderTabla(){
   const entradas = movimientos.filter(m=>m.tipo_mov==='entrada').length;
   const salidas  = movimientos.filter(m=>m.tipo_mov==='salida').length;
 
-  document.getElementById('ms-total').textContent    = movimientos.length;
-  document.getElementById('ms-entradas').textContent = entradas;
-  document.getElementById('ms-salidas').textContent  = salidas;
+  document.getElementById('ms-total').textContent   = movimientos.length;
+  document.getElementById('ms-salidas').textContent = salidas;
 
   if(!pagina.length){
     document.getElementById('tabla-body').innerHTML='<tr><td colspan="9" class="loading">No se encontraron movimientos</td></tr>';
