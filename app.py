@@ -128,6 +128,42 @@ def init_db():
 
 with app.app_context():
     init_db()
+    # Migracion: crear tabla mantenciones si no existe
+    try:
+        conn_m, mode_m = get_db()
+        cur_m = conn_m.cursor()
+        if mode_m == 'pg':
+            cur_m.execute('''CREATE TABLE IF NOT EXISTS mantenciones (
+                id SERIAL PRIMARY KEY,
+                activo_id TEXT NOT NULL,
+                fecha TEXT,
+                tipo TEXT DEFAULT 'correctiva',
+                descripcion TEXT,
+                costo REAL DEFAULT 0,
+                proveedor TEXT,
+                estado TEXT DEFAULT 'solucionado',
+                proxima_fecha TEXT,
+                usuario TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
+        else:
+            cur_m.execute('''CREATE TABLE IF NOT EXISTS mantenciones (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                activo_id TEXT NOT NULL,
+                fecha TEXT,
+                tipo TEXT DEFAULT 'correctiva',
+                descripcion TEXT,
+                costo REAL DEFAULT 0,
+                proveedor TEXT,
+                estado TEXT DEFAULT 'solucionado',
+                proxima_fecha TEXT,
+                usuario TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )''')
+        conn_m.commit()
+        conn_m.close()
+    except Exception as e_m:
+        print(f"Migracion mantenciones: {e_m}")
 
 def next_id():
     year = datetime.now().year % 100
@@ -664,9 +700,17 @@ def get_kpis():
     costo_mant = db_fetchone(
         "SELECT COALESCE(SUM(costo),0) as total FROM mantenciones")
     # Mantenciones por mes (ultimos 12 meses)
-    mant_mes = db_fetchall(
-        """SELECT SUBSTRING(fecha,4,7) as mes, COUNT(*) as n, COALESCE(SUM(costo),0) as costo
-           FROM mantenciones WHERE fecha != '' GROUP BY mes ORDER BY mes DESC LIMIT 12""")
+    try:
+        mant_mes = db_fetchall(
+            """SELECT SUBSTRING(fecha FROM 4 FOR 7) as mes, COUNT(*) as n, COALESCE(SUM(costo),0) as costo
+               FROM mantenciones WHERE fecha IS NOT NULL AND fecha != '' GROUP BY mes ORDER BY mes DESC LIMIT 12""")
+    except Exception:
+        try:
+            mant_mes = db_fetchall(
+                """SELECT substr(fecha,4,7) as mes, COUNT(*) as n, COALESCE(SUM(costo),0) as costo
+                   FROM mantenciones WHERE fecha IS NOT NULL AND fecha != '' GROUP BY mes ORDER BY mes DESC LIMIT 12""")
+        except Exception:
+            mant_mes = []
     # Activos mas problematicos
     mas_mant = db_fetchall(
         """SELECT a.id, a.subtipo, a.marca, a.modelo, a.edificio,
@@ -674,7 +718,7 @@ def get_kpis():
            FROM activos a LEFT JOIN mantenciones m ON a.id=m.activo_id
            GROUP BY a.id, a.subtipo, a.marca, a.modelo, a.edificio
            HAVING COUNT(m.id) > 0
-           ORDER BY num_mant DESC, costo_total DESC LIMIT 10""")
+           ORDER BY COUNT(m.id) DESC, COALESCE(SUM(m.costo),0) DESC LIMIT 10""")
     # Costo por tipo de activo
     costo_tipo = db_fetchall(
         """SELECT a.tipo, COALESCE(SUM(m.costo),0) as costo_total, COUNT(m.id) as num_mant
