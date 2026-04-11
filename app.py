@@ -584,6 +584,147 @@ def export_excel():
     return send_file(buf,download_name='activos_fijos.xlsx',as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+
+# ─── MANTENCIONES ────────────────────────────────────────────────────────────
+
+@app.route('/api/activos/<id>/mantenciones', methods=['GET'])
+@login_required
+def get_mantenciones(id):
+    rows = db_fetchall(
+        "SELECT * FROM mantenciones WHERE activo_id=? ORDER BY fecha DESC", (id,))
+    return jsonify(rows)
+
+@app.route('/api/activos/<id>/mantenciones', methods=['POST'])
+@admin_required
+def crear_mantencion(id):
+    d = request.json
+    conn2, mode2 = get_db()
+    cur2 = conn2.cursor()
+    if mode2 == 'pg':
+        cur2.execute(
+            "INSERT INTO mantenciones (activo_id,fecha,tipo,descripcion,costo,proveedor,estado,proxima_fecha,usuario) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+            (id, d.get('fecha',''), d.get('tipo','correctiva'),
+             d.get('descripcion',''), float(d.get('costo',0) or 0),
+             d.get('proveedor',''), d.get('estado','solucionado'),
+             d.get('proxima_fecha',''), session['user'])
+        )
+        cur2.execute(
+            "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
+            (id, 'Mantención',
+             f"Mantención {d.get('tipo','correctiva')} — {d.get('descripcion','')} — Costo: ${d.get('costo',0)}",
+             session['user'])
+        )
+    else:
+        cur2.execute(
+            "INSERT INTO mantenciones (activo_id,fecha,tipo,descripcion,costo,proveedor,estado,proxima_fecha,usuario) VALUES (?,?,?,?,?,?,?,?,?)",
+            (id, d.get('fecha',''), d.get('tipo','correctiva'),
+             d.get('descripcion',''), float(d.get('costo',0) or 0),
+             d.get('proveedor',''), d.get('estado','solucionado'),
+             d.get('proxima_fecha',''), session['user'])
+        )
+        cur2.execute(
+            "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+            (id, 'Mantención',
+             f"Mantención {d.get('tipo','correctiva')} — {d.get('descripcion','')} — Costo: ${d.get('costo',0)}",
+             session['user'])
+        )
+    conn2.commit()
+    conn2.close()
+    return jsonify({'ok': True})
+
+@app.route('/api/mantenciones/<int:mid>', methods=['DELETE'])
+@admin_required
+def eliminar_mantencion(mid):
+    db_execute("DELETE FROM mantenciones WHERE id=?", (mid,))
+    return jsonify({'ok': True})
+
+# ─── DASHBOARD / KPIs ────────────────────────────────────────────────────────
+
+@app.route('/dashboard')
+@login_required
+def dashboard():
+    return render_template('dashboard.html', user=session['user'], rol=session['rol'])
+
+@app.route('/api/kpis')
+@login_required
+def get_kpis():
+    # Activos por estado
+    por_estado = db_fetchall(
+        "SELECT estado, COUNT(*) as n FROM activos GROUP BY estado")
+    # Activos por tipo
+    por_tipo = db_fetchall(
+        "SELECT tipo, COUNT(*) as n FROM activos GROUP BY tipo ORDER BY n DESC")
+    # Activos por edificio
+    por_edificio = db_fetchall(
+        "SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio ORDER BY n DESC")
+    # Valor total e inventario
+    totales = db_fetchone(
+        "SELECT COUNT(*) as total, COALESCE(SUM(precio),0) as valor FROM activos")
+    # Costo total mantenciones
+    costo_mant = db_fetchone(
+        "SELECT COALESCE(SUM(costo),0) as total FROM mantenciones")
+    # Mantenciones por mes (ultimos 12 meses)
+    mant_mes = db_fetchall(
+        """SELECT SUBSTRING(fecha,4,7) as mes, COUNT(*) as n, COALESCE(SUM(costo),0) as costo
+           FROM mantenciones WHERE fecha != '' GROUP BY mes ORDER BY mes DESC LIMIT 12""")
+    # Activos mas problematicos
+    mas_mant = db_fetchall(
+        """SELECT a.id, a.subtipo, a.marca, a.modelo, a.edificio,
+                  COUNT(m.id) as num_mant, COALESCE(SUM(m.costo),0) as costo_total
+           FROM activos a LEFT JOIN mantenciones m ON a.id=m.activo_id
+           GROUP BY a.id, a.subtipo, a.marca, a.modelo, a.edificio
+           HAVING COUNT(m.id) > 0
+           ORDER BY num_mant DESC, costo_total DESC LIMIT 10""")
+    # Costo por tipo de activo
+    costo_tipo = db_fetchall(
+        """SELECT a.tipo, COALESCE(SUM(m.costo),0) as costo_total, COUNT(m.id) as num_mant
+           FROM activos a LEFT JOIN mantenciones m ON a.id=m.activo_id
+           GROUP BY a.tipo ORDER BY costo_total DESC""")
+    # Depreciacion total
+    activos_dep = db_fetchall(
+        "SELECT tipo, precio, fecha_compra, vida_util FROM activos WHERE precio > 0 AND fecha_compra != ''")
+    valor_actual_total = 0
+    dep_acum_total = 0
+    proximos_depreciar = []
+    from datetime import datetime
+    for a in activos_dep:
+        try:
+            fecha = None
+            for fmt in ['%d-%m-%Y','%Y-%m-%d','%d/%m/%Y']:
+                try: fecha = datetime.strptime(str(a['fecha_compra'])[:10], fmt); break
+                except: pass
+            if not fecha: continue
+            precio = float(a['precio'])
+            vida = int(a['vida_util'] or 7)
+            tasa = 1.0 / vida
+            anos = (datetime.now() - fecha).days / 365.25
+            val_res = precio * 0.10
+            dep = min(precio - val_res, (precio - val_res) * tasa * anos)
+            val_act = max(val_res, precio - dep)
+            valor_actual_total += val_act
+            dep_acum_total += dep
+            pct = min(100, dep / (precio - val_res) * 100) if precio > val_res else 100
+            if pct >= 70:
+                proximos_depreciar.append({
+                    'tipo': a['tipo'], 'porcentaje': round(pct,1),
+                    'valor_actual': round(val_act)
+                })
+        except: pass
+
+    return jsonify({
+        'por_estado':        por_estado,
+        'por_tipo':          por_tipo,
+        'por_edificio':      por_edificio,
+        'totales':           totales,
+        'costo_mantenciones':costo_mant['total'] if costo_mant else 0,
+        'mant_por_mes':      list(reversed(mant_mes)),
+        'mas_problematicos': mas_mant,
+        'costo_por_tipo':    costo_tipo,
+        'valor_actual_total':round(valor_actual_total),
+        'dep_acum_total':    round(dep_acum_total),
+        'proximos_depreciar':sorted(proximos_depreciar, key=lambda x:-x['porcentaje'])[:5],
+    })
+
 if __name__=='__main__':
     init_db()
     app.run(debug=False,host='0.0.0.0',port=int(os.environ.get('PORT',5000)))
