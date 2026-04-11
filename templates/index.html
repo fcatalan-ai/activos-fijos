@@ -177,6 +177,7 @@ tr:hover td{background:#f8fafc}
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn-sm" style="flex:1" onclick="abrirModalEditar()">✏️ Editar</button>
         <button class="btn-sm" style="flex:1" onclick="abrirModalTraslado()">🚚 Traslado</button>
+        <button class="btn-sm" style="flex:1;color:#c00;border-color:#fcc" onclick="confirmarEliminar()">🗑️ Eliminar</button>
       </div>
       {% endif %}
     </div>
@@ -261,7 +262,24 @@ tr:hover td{background:#f8fafc}
   </div>
 </div>
 
-<!-- MODAL TRASLADO -->
+<!-- MODAL ELIMINAR -->
+<div class="modal-bg" id="modal-eliminar">
+  <div class="modal" style="max-width:400px">
+    <h3 style="color:#c00">🗑️ Eliminar Activo</h3>
+    <p style="font-size:14px;color:#444;margin-bottom:8px">¿Estás seguro que deseas eliminar este activo?</p>
+    <div style="background:#fff3f3;border:1px solid #fcc;border-radius:8px;padding:12px;margin-bottom:16px">
+      <div style="font-size:13px;font-weight:700;color:#c00" id="del-id">—</div>
+      <div style="font-size:13px;color:#666;margin-top:4px" id="del-desc">—</div>
+    </div>
+    <p style="font-size:12px;color:#999;margin-bottom:16px">⚠️ Esta acción es permanente y no se puede deshacer. Se eliminará el activo y todo su historial.</p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="cerrarModal('modal-eliminar')">Cancelar</button>
+      <button style="padding:8px 20px;border-radius:7px;border:none;background:#c00;color:#fff;cursor:pointer;font-size:13px" onclick="eliminarActivo()">Sí, eliminar</button>
+    </div>
+  </div>
+</div>
+
+
 <div class="modal-bg" id="modal-traslado">
   <div class="modal">
     <h3>Registrar Traslado</h3>
@@ -517,6 +535,27 @@ async function guardarTraslado(){
   cerrarModal('modal-traslado');
   cargarStats(); filtrar();
   abrirPanel(activoActual.id);
+}
+
+function confirmarEliminar(){
+  if(!activoActual) return;
+  const a=activoActual;
+  document.getElementById('del-id').textContent=a.id;
+  document.getElementById('del-desc').textContent=`${a.subtipo||''} ${a.marca||''} ${a.modelo||''} — ${a.sala||''}`;
+  document.getElementById('modal-eliminar').classList.add('show');
+}
+
+async function eliminarActivo(){
+  if(!activoActual) return;
+  const id=activoActual.id;
+  const r=await fetch('/api/activos/'+id,{method:'DELETE'});
+  const d=await r.json();
+  if(d.ok){
+    cerrarModal('modal-eliminar');
+    cerrarPanel();
+    cargarStats();
+    filtrar();
+  }
 }
 
 cargarStats();
