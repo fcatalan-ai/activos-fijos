@@ -6,6 +6,7 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
+FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
 
 TIPOS = [
     'Equipamiento Tecnológico',
@@ -579,8 +580,19 @@ def _simple_qr_b64(text):
     ihdr=struct.pack('>II',w,h)+bytes([8,2,0,0,0])
     return base64.b64encode(b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',ihdr)+chunk(b'IDAT',comp)+chunk(b'IEND',b'')).decode()
 
-@app.route('/ficha/<id>')
+@app.route('/ficha/<id>', methods=['GET','POST'])
 def ficha_publica(id):
+    error = ''
+    # Verificar PIN en sesion
+    if not session.get('pin_ok'):
+        if request.method == 'POST':
+            pin = request.form.get('pin','').strip()
+            if pin == FICHA_PIN:
+                session['pin_ok'] = True
+            else:
+                error = 'PIN incorrecto, intenta nuevamente'
+        if not session.get('pin_ok'):
+            return render_template('pin.html', id=id, error=error)
     a = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not a: return "Activo no encontrado", 404
     dep = calcular_depreciacion(a)
