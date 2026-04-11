@@ -935,6 +935,417 @@ def export_movimientos_activos():
     return send_file(buf,download_name='movimientos_activos.xlsx',as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+
+@app.route('/api/export/informe-anual')
+@login_required
+def export_informe_anual():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
+    from datetime import datetime
+
+    anio = request.args.get('anio', str(datetime.now().year))
+    wb = openpyxl.Workbook()
+
+    AZUL_OSC = "1F3864"
+    AZUL_MED = "2E74B5"
+    AZUL_SUV = "E6F1FB"
+    VERDE    = "E2EFDA"
+    VERDE_OSC= "27500A"
+    AMARILLO = "FFF2CC"
+    ROJO_SUV = "FCEBEB"
+    BLANCO   = "FFFFFF"
+    GRIS     = "F2F2F2"
+
+    def fill(c):  return PatternFill("solid", start_color=c, fgColor=c)
+    def borde():
+        s = Side(style="thin", color="BFBFBF")
+        return Border(left=s, right=s, top=s, bottom=s)
+    def center(): return Alignment(horizontal="center", vertical="center", wrap_text=True)
+    def left():   return Alignment(horizontal="left",   vertical="center", wrap_text=True)
+
+    def hdr(ws, col, row, val, bg=None, bold=True, size=11, color="FFFFFF", aln=None):
+        cell = ws.cell(row=row, column=col, value=val)
+        cell.font = Font(name="Arial", bold=bold, size=size, color=color)
+        if bg: cell.fill = fill(bg)
+        cell.alignment = aln or center()
+        cell.border = borde()
+        return cell
+
+    def dat(ws, col, row, val, bg=None, bold=False, color="000000", aln=None, fmt=None):
+        cell = ws.cell(row=row, column=col, value=val)
+        cell.font = Font(name="Arial", bold=bold, size=10, color=color)
+        if bg: cell.fill = fill(bg)
+        cell.alignment = aln or center()
+        cell.border = borde()
+        if fmt: cell.number_format = fmt
+        return cell
+
+    # ── HOJA 1: PORTADA ──────────────────────────────────────────────────────
+    ws0 = wb.active
+    ws0.title = "Portada"
+    ws0.sheet_view.showGridLines = False
+    ws0.column_dimensions["A"].width = 5
+    ws0.column_dimensions["B"].width = 60
+
+    ws0.merge_cells("B2:B3")
+    c = ws0["B2"]
+    c.value = f"INFORME ANUAL DE ACTIVOS FIJOS"
+    c.font = Font(name="Arial", bold=True, size=20, color=BLANCO)
+    c.fill = fill(AZUL_OSC)
+    c.alignment = center()
+    ws0.row_dimensions[2].height = 40
+    ws0.row_dimensions[3].height = 40
+
+    ws0.merge_cells("B4:B4")
+    c = ws0["B4"]
+    c.value = f"Año {anio} — Colegio"
+    c.font = Font(name="Arial", size=14, color=BLANCO, italic=True)
+    c.fill = fill(AZUL_MED)
+    c.alignment = center()
+    ws0.row_dimensions[4].height = 28
+
+    ws0.merge_cells("B5:B5")
+    c = ws0["B5"]
+    c.value = f"Generado el {datetime.now().strftime('%d-%m-%Y a las %H:%M')}"
+    c.font = Font(name="Arial", size=11, color="555555")
+    c.fill = fill(GRIS)
+    c.alignment = center()
+    ws0.row_dimensions[5].height = 22
+
+    # Resumen ejecutivo
+    activos = db_fetchall("SELECT * FROM activos")
+    total   = len(activos)
+    buenos  = sum(1 for a in activos if a.get('estado')=='Bueno')
+    regulares=sum(1 for a in activos if a.get('estado')=='Regular')
+    malos   = sum(1 for a in activos if a.get('estado')=='Malo')
+    valor_total = sum(float(a.get('precio') or 0) for a in activos)
+
+    # Depreciacion
+    valor_actual_total = 0
+    dep_total = 0
+    for a in activos:
+        try:
+            fecha = None
+            for fmt in ['%d-%m-%Y','%Y-%m-%d']:
+                try: fecha = datetime.strptime(str(a['fecha_compra'])[:10], fmt); break
+                except: pass
+            if not fecha: continue
+            precio = float(a['precio'] or 0)
+            vida   = int(a['vida_util'] or 7)
+            tasa   = 1.0/vida
+            anos   = (datetime.now()-fecha).days/365.25
+            val_res= precio*0.10
+            dep    = min(precio-val_res,(precio-val_res)*tasa*anos)
+            val_act= max(val_res, precio-dep)
+            valor_actual_total += val_act
+            dep_total += dep
+        except: pass
+
+    mant_total = db_fetchone("SELECT COALESCE(SUM(costo),0) as s FROM mantenciones")
+    bajas = db_fetchall("SELECT COUNT(*) as n FROM movimientos_activos WHERE tipo='salida'")
+
+    resumen = [
+        ("📦 Total activos registrados",   total,          AZUL_SUV),
+        ("✅ Activos en buen estado",       buenos,         VERDE),
+        ("⚠️ Activos en estado regular",   regulares,      AMARILLO),
+        ("❌ Activos en mal estado",        malos,          ROJO_SUV),
+        ("💰 Valor bruto inventario",       f"${round(valor_total):,}".replace(',','.'), AZUL_SUV),
+        ("📉 Valor actual (depreciado)",    f"${round(valor_actual_total):,}".replace(',','.'), AZUL_SUV),
+        ("⬇️ Depreciación acumulada",      f"${round(dep_total):,}".replace(',','.'),   AMARILLO),
+        ("🔧 Gasto total mantenciones",     f"${round(mant_total['s'] if mant_total else 0):,}".replace(',','.'), ROJO_SUV),
+        ("📤 Guías de salida emitidas",     bajas[0]['n'] if bajas else 0, GRIS),
+    ]
+
+    row = 7
+    ws0.merge_cells(f"B{row}:B{row}")
+    c = ws0[f"B{row}"]
+    c.value = "RESUMEN EJECUTIVO"
+    c.font = Font(name="Arial", bold=True, size=12, color=BLANCO)
+    c.fill = fill(AZUL_OSC)
+    c.alignment = center()
+    ws0.row_dimensions[row].height = 24
+    row += 1
+
+    for label, valor, bg in resumen:
+        ws0.row_dimensions[row].height = 20
+        c1 = ws0[f"B{row}"]
+        c1.value = f"  {label}"
+        c1.font  = Font(name="Arial", size=11, bold=False)
+        c1.fill  = fill(bg)
+        c1.alignment = left()
+        c1.border = borde()
+        # Valor en misma celda como segunda columna
+        ws0.merge_cells(f"B{row}:B{row}")
+        c1.value = f"{label}:   {valor}"
+        row += 1
+
+    # ── HOJA 2: INVENTARIO COMPLETO ──────────────────────────────────────────
+    ws1 = wb.create_sheet("Inventario Completo")
+    ws1.sheet_view.showGridLines = False
+    ws1.freeze_panes = "A3"
+
+    cols_inv = [
+        ("ID Activo",20),("Tipo",22),("Subtipo",18),("Marca",14),("Modelo",18),
+        ("N° Serie",18),("Estado",12),("Edificio",14),("Sala",14),("Responsable",20),
+        ("Fecha Compra",14),("Precio",14),("Vida Útil",10),("Valor Actual",14),("Dep. Acum.",14)
+    ]
+    ws1.merge_cells(f"A1:{get_column_letter(len(cols_inv))}1")
+    c=ws1["A1"]
+    c.value=f"INVENTARIO COMPLETO DE ACTIVOS FIJOS — Año {anio}"
+    c.font=Font(name="Arial",bold=True,size=13,color=BLANCO)
+    c.fill=fill(AZUL_OSC)
+    c.alignment=center()
+    ws1.row_dimensions[1].height=28
+
+    for col,(hd,w) in enumerate(cols_inv,1):
+        hdr(ws1,col,2,hd,bg=AZUL_MED)
+        ws1.column_dimensions[get_column_letter(col)].width=w
+    ws1.row_dimensions[2].height=22
+
+    for ri,a in enumerate(activos,3):
+        bg = BLANCO if ri%2==0 else GRIS
+        # Calcular valor actual y dep
+        val_act=0; dep_a=0
+        try:
+            fecha=None
+            for fmt in ['%d-%m-%Y','%Y-%m-%d']:
+                try: fecha=datetime.strptime(str(a['fecha_compra'])[:10],fmt); break
+                except: pass
+            if fecha and a.get('precio'):
+                precio=float(a['precio']); vida=int(a['vida_util'] or 7)
+                anos=(datetime.now()-fecha).days/365.25
+                val_res=precio*0.10; dep=min(precio-val_res,(precio-val_res)/vida*anos)
+                val_act=max(val_res,precio-dep); dep_a=dep
+        except: pass
+
+        estado_bg = VERDE if a.get('estado')=='Bueno' else AMARILLO if a.get('estado')=='Regular' else ROJO_SUV
+        vals = [a.get('id'),a.get('tipo'),a.get('subtipo'),a.get('marca'),a.get('modelo'),
+                a.get('serie'),a.get('estado'),a.get('edificio'),a.get('sala'),a.get('responsable'),
+                a.get('fecha_compra'),float(a.get('precio') or 0),a.get('vida_util'),round(val_act),round(dep_a)]
+        for col,val in enumerate(vals,1):
+            b = estado_bg if col==7 else bg
+            cell=dat(ws1,col,ri,val,bg=b)
+            if col in [12,14,15]: cell.number_format='#,##0'
+        ws1.row_dimensions[ri].height=16
+
+    # ── HOJA 3: RESUMEN POR EDIFICIO ─────────────────────────────────────────
+    ws2 = wb.create_sheet("Por Edificio")
+    ws2.sheet_view.showGridLines = False
+
+    ws2.merge_cells("A1:F1")
+    c=ws2["A1"]
+    c.value=f"RESUMEN POR EDIFICIO — Año {anio}"
+    c.font=Font(name="Arial",bold=True,size=13,color=BLANCO)
+    c.fill=fill(AZUL_OSC); c.alignment=center()
+    ws2.row_dimensions[1].height=28
+
+    edificios_data = db_fetchall(
+        """SELECT edificio, COUNT(*) as n,
+                  SUM(CASE WHEN estado='Bueno' THEN 1 ELSE 0 END) as buenos,
+                  SUM(CASE WHEN estado='Regular' THEN 1 ELSE 0 END) as regulares,
+                  SUM(CASE WHEN estado='Malo' THEN 1 ELSE 0 END) as malos,
+                  COALESCE(SUM(precio),0) as valor
+           FROM activos GROUP BY edificio ORDER BY n DESC""")
+
+    hdrs_ed = ["Edificio","Total Activos","Bueno","Regular","Malo","Valor Inventario"]
+    for col,h in enumerate(hdrs_ed,1):
+        hdr(ws2,col,2,h,bg=AZUL_MED)
+        ws2.column_dimensions[get_column_letter(col)].width=20
+    ws2.row_dimensions[2].height=22
+
+    for ri,ed in enumerate(edificios_data,3):
+        bg = BLANCO if ri%2==0 else GRIS
+        ws2.row_dimensions[ri].height=18
+        dat(ws2,1,ri,ed.get('edificio','Sin asignar'),bg=bg,bold=True,aln=left())
+        dat(ws2,2,ri,ed.get('n',0),bg=bg)
+        dat(ws2,3,ri,ed.get('buenos',0),bg=VERDE)
+        dat(ws2,4,ri,ed.get('regulares',0),bg=AMARILLO)
+        dat(ws2,5,ri,ed.get('malos',0),bg=ROJO_SUV)
+        dat(ws2,6,ri,float(ed.get('valor',0)),bg=bg,fmt='#,##0')
+
+    # ── HOJA 4: RESUMEN POR TIPO Y SUBTIPO ───────────────────────────────────
+    ws3 = wb.create_sheet("Por Tipo y Subtipo")
+    ws3.sheet_view.showGridLines = False
+
+    ws3.merge_cells("A1:E1")
+    c=ws3["A1"]
+    c.value=f"DISTRIBUCIÓN POR TIPO Y SUBTIPO — Año {anio}"
+    c.font=Font(name="Arial",bold=True,size=13,color=BLANCO)
+    c.fill=fill(AZUL_OSC); c.alignment=center()
+    ws3.row_dimensions[1].height=28
+
+    tipo_data = db_fetchall(
+        """SELECT tipo, subtipo, COUNT(*) as n,
+                  SUM(CASE WHEN estado='Bueno' THEN 1 ELSE 0 END) as buenos,
+                  COALESCE(SUM(precio),0) as valor
+           FROM activos GROUP BY tipo, subtipo ORDER BY tipo, n DESC""")
+
+    hdrs_t = ["Tipo","Subtipo","Cantidad","En buen estado","Valor"]
+    for col,h in enumerate(hdrs_t,1):
+        hdr(ws3,col,2,h,bg=AZUL_MED)
+        ws3.column_dimensions[get_column_letter(col)].width=[22,18,12,16,16][col-1]
+    ws3.row_dimensions[2].height=22
+
+    prev_tipo=""
+    for ri,t in enumerate(tipo_data,3):
+        bg = AZUL_SUV if t.get('tipo')!=prev_tipo else (BLANCO if ri%2==0 else GRIS)
+        bold_tipo = t.get('tipo')!=prev_tipo
+        ws3.row_dimensions[ri].height=16
+        dat(ws3,1,ri,t.get('tipo',''),bg=bg,bold=bold_tipo,aln=left())
+        dat(ws3,2,ri,t.get('subtipo',''),bg=bg,aln=left())
+        dat(ws3,3,ri,t.get('n',0),bg=bg)
+        dat(ws3,4,ri,t.get('buenos',0),bg=VERDE if t.get('buenos')==t.get('n') else bg)
+        dat(ws3,5,ri,float(t.get('valor',0)),bg=bg,fmt='#,##0')
+        prev_tipo=t.get('tipo','')
+
+    # ── HOJA 5: MANTENCIONES ─────────────────────────────────────────────────
+    ws4 = wb.create_sheet("Mantenciones")
+    ws4.sheet_view.showGridLines = False
+
+    ws4.merge_cells("A1:H1")
+    c=ws4["A1"]
+    c.value=f"REGISTRO DE MANTENCIONES — Año {anio}"
+    c.font=Font(name="Arial",bold=True,size=13,color=BLANCO)
+    c.fill=fill(AZUL_OSC); c.alignment=center()
+    ws4.row_dimensions[1].height=28
+
+    mant_data = db_fetchall(
+        """SELECT m.fecha, m.tipo, m.descripcion, m.costo, m.proveedor, m.estado,
+                  m.activo_id, a.subtipo, a.edificio
+           FROM mantenciones m LEFT JOIN activos a ON m.activo_id=a.id
+           ORDER BY m.fecha DESC""")
+
+    hdrs_m=["Fecha","ID Activo","Subtipo","Edificio","Tipo","Descripción","Costo","Proveedor","Estado"]
+    for col,h in enumerate(hdrs_m,1):
+        hdr(ws4,col,2,h,bg=AZUL_MED)
+        ws4.column_dimensions[get_column_letter(col)].width=[12,14,16,14,12,30,12,20,12][col-1]
+    ws4.row_dimensions[2].height=22
+
+    for ri,m in enumerate(mant_data,3):
+        bg=BLANCO if ri%2==0 else GRIS
+        ws4.row_dimensions[ri].height=16
+        dat(ws4,1,ri,m.get('fecha',''),bg=bg)
+        dat(ws4,2,ri,m.get('activo_id',''),bg=bg,bold=True,color=AZUL_OSC)
+        dat(ws4,3,ri,m.get('subtipo',''),bg=bg)
+        dat(ws4,4,ri,m.get('edificio',''),bg=bg)
+        dat(ws4,5,ri,m.get('tipo',''),bg=bg)
+        dat(ws4,6,ri,m.get('descripcion',''),bg=bg,aln=left())
+        dat(ws4,7,ri,float(m.get('costo') or 0),bg=bg,fmt='#,##0')
+        dat(ws4,8,ri,m.get('proveedor',''),bg=bg,aln=left())
+        estado_bg=VERDE if m.get('estado')=='solucionado' else AMARILLO
+        dat(ws4,9,ri,m.get('estado',''),bg=estado_bg)
+
+    # Totales mantenciones
+    if mant_data:
+        tot_row = len(mant_data)+3
+        ws4.row_dimensions[tot_row].height=20
+        c=ws4.cell(row=tot_row,column=6,value="TOTAL GASTO MANTENCIONES:")
+        c.font=Font(name="Arial",bold=True,size=11)
+        c.fill=fill(AZUL_SUV); c.alignment=center(); c.border=borde()
+        tot_mant=sum(float(m.get('costo') or 0) for m in mant_data)
+        c2=ws4.cell(row=tot_row,column=7,value=round(tot_mant))
+        c2.font=Font(name="Arial",bold=True,size=11,color="C00000")
+        c2.fill=fill(ROJO_SUV); c2.alignment=center()
+        c2.number_format='#,##0'; c2.border=borde()
+
+    # ── HOJA 6: GUÍAS DE SALIDA ───────────────────────────────────────────────
+    ws5 = wb.create_sheet("Guías de Salida")
+    ws5.sheet_view.showGridLines = False
+
+    ws5.merge_cells("A1:G1")
+    c=ws5["A1"]
+    c.value=f"GUÍAS DE SALIDA — BAJAS Y SALIDAS DE INVENTARIO — Año {anio}"
+    c.font=Font(name="Arial",bold=True,size=13,color=BLANCO)
+    c.fill=fill(AZUL_OSC); c.alignment=center()
+    ws5.row_dimensions[1].height=28
+
+    try:
+        bajas_data = db_fetchall(
+            """SELECT m.fecha, m.activo_id, m.descripcion, m.edificio,
+                      m.responsable, m.usuario, a.subtipo, a.marca, a.modelo, a.precio
+               FROM movimientos_activos m LEFT JOIN activos a ON m.activo_id=a.id
+               WHERE m.tipo='salida' ORDER BY m.fecha DESC""")
+    except: bajas_data=[]
+
+    hdrs_b=["Fecha","ID Activo","Subtipo","Marca/Modelo","Descripción/Motivo","Edificio","Responsable","Valor Original","Usuario"]
+    for col,h in enumerate(hdrs_b,1):
+        hdr(ws5,col,2,h,bg=AZUL_MED)
+        ws5.column_dimensions[get_column_letter(col)].width=[12,14,16,18,28,14,18,14,14][col-1]
+    ws5.row_dimensions[2].height=22
+
+    for ri,b in enumerate(bajas_data,3):
+        bg=BLANCO if ri%2==0 else GRIS
+        ws5.row_dimensions[ri].height=16
+        dat(ws5,1,ri,b.get('fecha',''),bg=bg)
+        dat(ws5,2,ri,b.get('activo_id',''),bg=bg,bold=True,color="C00000")
+        dat(ws5,3,ri,b.get('subtipo',''),bg=bg)
+        dat(ws5,4,ri,f"{b.get('marca','')} {b.get('modelo','')}".strip(),bg=bg)
+        dat(ws5,5,ri,b.get('descripcion',''),bg=bg,aln=left())
+        dat(ws5,6,ri,b.get('edificio',''),bg=bg)
+        dat(ws5,7,ri,b.get('responsable',''),bg=bg)
+        dat(ws5,8,ri,float(b.get('precio') or 0),bg=ROJO_SUV,fmt='#,##0')
+        dat(ws5,9,ri,b.get('usuario',''),bg=bg)
+
+    if not bajas_data:
+        ws5.merge_cells("A3:I3")
+        c=ws5["A3"]
+        c.value="Sin guías de salida registradas"
+        c.font=Font(name="Arial",italic=True,color="999999")
+        c.alignment=center()
+
+    # ── HOJA 7: DEPRECIACIÓN ─────────────────────────────────────────────────
+    ws6 = wb.create_sheet("Depreciación")
+    ws6.sheet_view.showGridLines = False
+
+    ws6.merge_cells("A1:H1")
+    c=ws6["A1"]
+    c.value=f"TABLA DE DEPRECIACIÓN SII — Año {anio}"
+    c.font=Font(name="Arial",bold=True,size=13,color=BLANCO)
+    c.fill=fill(AZUL_OSC); c.alignment=center()
+    ws6.row_dimensions[1].height=28
+
+    hdrs_d=["ID Activo","Tipo","Subtipo","Fecha Compra","Precio Original","Vida Útil","Años Uso","Valor Actual","Dep. Acumulada","% Depreciado"]
+    for col,h in enumerate(hdrs_d,1):
+        hdr(ws6,col,2,h,bg=AZUL_MED)
+        ws6.column_dimensions[get_column_letter(col)].width=[14,20,16,14,16,10,10,14,14,12][col-1]
+    ws6.row_dimensions[2].height=22
+
+    activos_dep = [a for a in activos if a.get('precio') and a.get('fecha_compra')]
+    for ri,a in enumerate(activos_dep,3):
+        try:
+            fecha=None
+            for fmt in ['%d-%m-%Y','%Y-%m-%d']:
+                try: fecha=datetime.strptime(str(a['fecha_compra'])[:10],fmt); break
+                except: pass
+            if not fecha: continue
+            precio=float(a['precio']); vida=int(a['vida_util'] or 7)
+            anos=round((datetime.now()-fecha).days/365.25,1)
+            val_res=precio*0.10
+            dep=min(precio-val_res,(precio-val_res)/vida*anos)
+            val_act=max(val_res,precio-dep)
+            pct=min(100,round(dep/(precio-val_res)*100,1)) if precio>val_res else 100
+            bg=ROJO_SUV if pct>=80 else AMARILLO if pct>=50 else BLANCO if ri%2==0 else GRIS
+            ws6.row_dimensions[ri].height=16
+            dat(ws6,1,ri,a.get('id'),bg=bg,bold=True,color=AZUL_OSC)
+            dat(ws6,2,ri,a.get('tipo'),bg=bg,aln=left())
+            dat(ws6,3,ri,a.get('subtipo'),bg=bg,aln=left())
+            dat(ws6,4,ri,a.get('fecha_compra'),bg=bg)
+            dat(ws6,5,ri,precio,bg=bg,fmt='#,##0')
+            dat(ws6,6,ri,f"{vida} años",bg=bg)
+            dat(ws6,7,ri,f"{anos} años",bg=bg)
+            dat(ws6,8,ri,round(val_act),bg=bg,fmt='#,##0')
+            dat(ws6,9,ri,round(dep),bg=bg,fmt='#,##0')
+            c=dat(ws6,10,ri,f"{pct}%",bg=bg,bold=pct>=80)
+            if pct>=80: c.font=Font(name="Arial",bold=True,color="C00000",size=10)
+        except: pass
+
+    buf = io.BytesIO()
+    wb.save(buf); buf.seek(0)
+    fname = f"Informe_Activos_Fijos_{anio}.xlsx"
+    return send_file(buf, download_name=fname, as_attachment=True,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
 if __name__=='__main__':
     init_db()
     app.run(debug=False,host='0.0.0.0',port=int(os.environ.get('PORT',5000)))
