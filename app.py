@@ -825,16 +825,18 @@ def get_kpis():
     subtipo  = request.args.get('subtipo','')
     edificio = request.args.get('edificio','')
 
+    cc_filtro = request.args.get('centro_costo','')
     filtro = " WHERE 1=1"
     params = []
-    if tipo:     filtro += " AND tipo=?";     params.append(tipo)
-    if subtipo:  filtro += " AND subtipo LIKE ?"; params.append(f'%{subtipo}%')
-    if edificio: filtro += " AND edificio=?"; params.append(edificio)
+    if tipo:      filtro += " AND tipo=?";          params.append(tipo)
+    if subtipo:   filtro += " AND subtipo LIKE ?";  params.append(f'%{subtipo}%')
+    if edificio:  filtro += " AND edificio=?";      params.append(edificio)
+    if cc_filtro: filtro += " AND centro_costo=?";  params.append(cc_filtro)
 
     por_estado = db_fetchall(f"SELECT estado, COUNT(*) as n FROM activos{filtro} GROUP BY estado", params)
     por_tipo   = db_fetchall(f"SELECT tipo, COUNT(*) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
     por_edificio=db_fetchall(f"SELECT edificio, COUNT(*) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
-    por_cc     =db_fetchall(f"SELECT centro_costo, COUNT(*) as n FROM activos{filtro} WHERE centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
+    por_cc     =db_fetchall(f"SELECT centro_costo, COUNT(*) as n FROM activos{filtro} AND centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
     totales    = db_fetchone(f"SELECT COUNT(*) as total, COALESCE(SUM(precio),0) as valor FROM activos{filtro}", params)
     # Costo total mantenciones
     costo_mant = db_fetchone(
