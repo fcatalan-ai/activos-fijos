@@ -484,12 +484,14 @@ def importar_excel():
         return jsonify({'error':'Solo se aceptan archivos Excel (.xlsx)'}), 400
     try:
         import openpyxl
+        from datetime import date as dt_date, timedelta
         wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
 
-        # Buscar hoja ACTIVOS (plantilla v4), luego CARGA_ACTIVOS (v1), luego primera util
+        # Buscar hoja ACTIVOS
         ws = None
         for name in wb.sheetnames:
-            if name.upper() == 'ACTIVOS':
+            nu = name.upper()
+            if nu == 'ACTIVOS':
                 ws = wb[name]; break
         if ws is None:
             for name in wb.sheetnames:
@@ -497,130 +499,135 @@ def importar_excel():
                 if 'LISTA' not in nu and 'REFERENCIA' not in nu:
                     ws = wb[name]; break
         if ws is None:
-            return jsonify({'error': 'No se encontró la hoja de datos en el archivo'}), 400
+            return jsonify({'error':'No se encontro hoja ACTIVOS'}), 400
 
-        # Columnas fijas plantilla v4 (fila 3=headers, datos desde fila 4)
-        # A=Tipo B=Subtipo C=Marca D=Modelo E=Serie F=Estado
-        # G=Edificio H=Sala I=Responsable J=CentroCosto
-        # K=FechaCompra L=Precio M=Documento N=VidaUtil O=Observaciones
-        # Verificar que la fila 3 tenga encabezados correctos
-        fila_inicio = 4
-        header_tipo = ws.cell(row=3, column=1).value
-        if header_tipo is None or 'tipo' not in str(header_tipo).lower():
-            # Intentar fila 1 o 2 como encabezado
-            for test_row in [1, 2]:
-                val = ws.cell(row=test_row, column=1).value
-                if val and 'tipo' in str(val).lower():
-                    fila_inicio = test_row + 1
-                    break
+        def celda_str(row, col):
+            """Retorna siempre un string limpio, nunca None"""
+            v = ws.cell(row=row, column=col).value
+            if v is None:
+                return ''
+            if hasattr(v, 'strftime'):
+                return v.strftime('%d-%m-%Y')
+            return str(v).strip()
 
-        def gv(row, col):
-            """Leer celda y retornar string limpio"""
+        def celda_fecha(row, col):
+            """Convierte cualquier formato de fecha a DD-MM-YYYY"""
+            v = ws.cell(row=row, column=col).value
+            if v is None:
+                return ''
+            # Numero serial de Excel
+            if isinstance(v, (int, float)) and 30000 < v < 70000:
+                try:
+                    d = dt_date(1899, 12, 30) + timedelta(days=int(v))
+                    return d.strftime('%d-%m-%Y')
+                except:
+                    return ''
+            # Objeto datetime/date
+            if hasattr(v, 'strftime'):
+                return v.strftime('%d-%m-%Y')
+            # String - normalizar
+            s = str(v).strip()
+            s = s.replace('/', '-')
+            partes = s.split('-')
+            if len(partes) == 3:
+                if len(partes[0]) == 4:  # YYYY-MM-DD
+                    return f"{partes[2].zfill(2)}-{partes[1].zfill(2)}-{partes[0]}"
+                elif len(partes[2]) == 4:  # DD-MM-YYYY
+                    return f"{partes[0].zfill(2)}-{partes[1].zfill(2)}-{partes[2]}"
+            return s
+
+        def celda_float(row, col):
+            """Retorna float, nunca None"""
+            v = ws.cell(row=row, column=col).value
+            if v is None:
+                return 0.0
+            if isinstance(v, (int, float)):
+                return float(v)
             try:
-                v = ws.cell(row=row, column=col).value
-                if v is None: return ''
-                # datetime object desde Excel
-                if hasattr(v, 'strftime'):
-                    return v.strftime('%d-%m-%Y')
-                # Numero serial de Excel (fecha almacenada como numero)
-                if col == 11 and isinstance(v, (int, float)) and 40000 < v < 60000:
-                    from datetime import date, timedelta
-                    fecha = date(1899, 12, 30) + timedelta(days=int(v))
-                    return fecha.strftime('%d-%m-%Y')
-                s = str(v).strip()
-                s = s.replace('\n', ' ').strip()
-                # Normalizar fecha DD-MM-YYYY o YYYY-MM-DD o DD/MM/YYYY
-                if col == 11 and s:
-                    partes = s.replace('/','-').split('-')
-                    if len(partes) == 3:
-                        if len(partes[0]) == 4:  # YYYY-MM-DD
-                            s = f"{partes[2].zfill(2)}-{partes[1].zfill(2)}-{partes[0]}"
-                        elif len(partes[2]) == 4:  # DD-MM-YYYY ya correcto
-                            s = f"{partes[0].zfill(2)}-{partes[1].zfill(2)}-{partes[2]}"
-                return s
-            except: return ''
+                return float(str(v).replace('.','').replace(',','.').replace('$',''))
+            except:
+                return 0.0
+
+        def celda_int(row, col, default=7):
+            """Retorna int, nunca None"""
+            v = ws.cell(row=row, column=col).value
+            if v is None:
+                return default
+            if isinstance(v, (int, float)):
+                return int(v)
+            try:
+                return int(float(str(v)))
+            except:
+                return default
 
         creados = 0
         errores = []
-        omitidos = 0
 
-        for row_num in range(fila_inicio, min(ws.max_row + 1, 600)):
-            tipo     = gv(row_num, 1)
-            subtipo  = gv(row_num, 2)
+        for row_num in range(4, min(ws.max_row + 1, 600)):
+            # Leer tipo y subtipo para detectar fila vacía
+            tipo    = celda_str(row_num, 1)
+            subtipo = celda_str(row_num, 2)
 
-            # Fila vacía — saltar silenciosamente
             if not tipo and not subtipo:
-                omitidos += 1
+                continue  # fila vacía
+
+            if not tipo or not subtipo:
+                errores.append(f"Fila {row_num}: Tipo o Subtipo vacío")
                 continue
 
-            # Validar obligatorios
-            edificio = gv(row_num, 7)
-            if not tipo or not subtipo or not edificio:
-                errores.append(f"Fila {row_num}: campos obligatorios vacíos — Tipo={repr(tipo)} Subtipo={repr(subtipo)} Edificio={repr(edificio)}")
+            edificio = celda_str(row_num, 7)
+            if not edificio:
+                errores.append(f"Fila {row_num}: Edificio vacío")
                 continue
 
             try:
-                marca   = gv(row_num, 3)
-                modelo  = gv(row_num, 4)
-                serie   = gv(row_num, 5)
-                estado  = gv(row_num, 6) or 'Bueno'
-                if estado not in ('Bueno','Regular','Malo'): estado = 'Bueno'
-                sala    = gv(row_num, 8)
-                resp    = gv(row_num, 9)
-                cc      = gv(row_num, 10)
-                fecha   = gv(row_num, 11)
-                doc     = gv(row_num, 13)
-                obs     = gv(row_num, 15)
-                usu     = session['user']
-
-                # Normalizar fecha a DD-MM-YYYY
-                if fecha:
-                    partes = fecha.replace('/','-').split('-')
-                    if len(partes) == 3 and len(partes[0]) == 4:
-                        fecha = f"{partes[2]}-{partes[1]}-{partes[0]}"
-
-                # Precio
-                # Precio - puede venir como int/float directamente
-                precio_cell = ws.cell(row=row_num, column=12).value
-                try:
-                    if isinstance(precio_cell, (int, float)):
-                        precio = float(precio_cell)
-                    elif precio_cell:
-                        precio = float(str(precio_cell).replace('.','').replace(',','.').replace('$',''))
-                    else:
-                        precio = 0
-                except: precio = 0
-
-                # Vida útil
-                vida_raw = gv(row_num, 14)
-                try: vida = int(float(vida_raw)) if vida_raw else VIDA_UTIL_SII.get(tipo, 7)
-                except: vida = VIDA_UTIL_SII.get(tipo, 7)
+                # Leer todos los campos con tipos correctos
+                marca   = celda_str(row_num, 3)
+                modelo  = celda_str(row_num, 4)
+                serie   = celda_str(row_num, 5)
+                estado  = celda_str(row_num, 6) or 'Bueno'
+                if estado not in ('Bueno', 'Regular', 'Malo'):
+                    estado = 'Bueno'
+                sala    = celda_str(row_num, 8)
+                resp    = celda_str(row_num, 9)
+                cc      = celda_str(row_num, 10)
+                fecha   = celda_fecha(row_num, 11)
+                precio  = celda_float(row_num, 12)
+                doc     = celda_str(row_num, 13)
+                vida    = celda_int(row_num, 14, VIDA_UTIL_SII.get(tipo, 7))
+                obs     = celda_str(row_num, 15)
+                usu     = str(session['user'])
 
                 # Generar ID
-                try:
-                    aid = next_id(fecha)
-                except Exception as eid:
-                    aid = next_id()
+                aid = next_id(fecha)
+
+                # Construir tupla con tipos TODOS correctos para psycopg2
+                params_pg = (
+                    str(aid), str(tipo), str(subtipo), str(marca),
+                    str(modelo), str(serie), str(estado), str(edificio),
+                    str(sala), str(resp), str(fecha), float(precio),
+                    str(doc), int(vida), str(obs), '', str(cc)
+                )
 
                 conn2, mode2 = get_db()
                 cur2 = conn2.cursor()
                 if mode2 == 'pg':
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                        (str(aid),tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,int(vida),obs,'',cc)
+                        params_pg
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
-                        (str(aid),'Alta',f'Importado Excel — {subtipo} {marca} {modelo}',str(usu))
+                        (str(aid), 'Alta', f'Importado Excel — {subtipo} {marca} {modelo}', usu)
                     )
                 else:
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,int(vida),obs,'',cc)
+                        params_pg
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                        (aid,'Alta',f'Importado Excel — {subtipo} {marca} {modelo}',usu)
+                        (aid, 'Alta', f'Importado Excel — {subtipo} {marca} {modelo}', usu)
                     )
                 conn2.commit()
                 conn2.close()
@@ -628,26 +635,17 @@ def importar_excel():
 
             except Exception as e:
                 import traceback
-                tb = traceback.format_exc()
-                # Get the actual line that failed
-                lines = [l.strip() for l in tb.split('\n') if l.strip() and 'File' in l]
-                loc = lines[-1] if lines else ''
-                errores.append(f"Fila {row_num}: {str(e)} | {loc}")
+                errores.append(f"Fila {row_num}: {str(e)}")
 
         if creados == 0 and not errores:
-            return jsonify({
-                'ok': False,
-                'mensaje': 'No se importó ningún activo. Verifica que la hoja se llame ACTIVOS y los datos estén desde la fila 4.',
-                'errores': []
-            })
+            return jsonify({'ok': False, 'mensaje': 'No se encontraron datos en la hoja ACTIVOS desde la fila 4.', 'errores': []})
 
         msg = f"{creados} activo{'s' if creados!=1 else ''} importado{'s' if creados!=1 else ''} correctamente"
-        if omitidos: msg += f" ({omitidos} filas vacías omitidas)"
         return jsonify({'ok': True, 'creados': creados, 'errores': errores[:10], 'mensaje': msg})
 
     except Exception as e:
         import traceback
-        return jsonify({'error': f'Error procesando archivo: {str(e)}', 'detalle': traceback.format_exc().splitlines()[-1]}), 500
+        return jsonify({'error': f'Error: {str(e)}', 'detalle': traceback.format_exc()[-300:]}), 500
 
 
 @app.route('/api/activos/<id>/qr')
