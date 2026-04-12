@@ -114,6 +114,10 @@ tr:hover td{background:#f8fafc}
       <option>Bueno</option><option>Regular</option><option>Malo</option>
       <option>De Baja</option>
     </select>
+    <select id="f-cc" onchange="filtrar()" style="min-width:180px">
+      <option value="">Todos los centros</option>
+      {% for cc in centros_costo %}<option value="{{ cc }}">{{ cc }}</option>{% endfor %}
+    </select>
     <select id="f-edificio" onchange="filtrar()">
       <option value="">Todos los edificios</option>
       <option>Básica</option><option>Media</option><option>Parvularia</option>
@@ -128,11 +132,11 @@ tr:hover td{background:#f8fafc}
     <table>
       <thead>
         <tr>
-          <th id="th-cb" style="display:none;width:36px"><input type="checkbox" id="cb-todos" onchange="seleccionarTodos(this)" class="cb-activo"></th><th>Foto</th><th>ID Activo</th><th>Subtipo</th><th>Marca / Modelo</th>
-          <th>N° Serie</th><th>Estado</th><th>Edificio / Sala</th><th>Responsable</th><th>Precio</th><th></th>
+          <th id="th-cb" style="display:none;width:36px"><input type="checkbox" id="cb-todos" onchange="seleccionarTodos(this)" class="cb-activo"></th><th>ID Activo</th><th>Subtipo</th><th>Marca / Modelo</th>
+          <th>N° Serie</th><th>Estado</th><th>Edificio / Sala</th><th>Responsable</th><th>Centro de Costo</th><th>Precio</th><th></th>
         </tr>
       </thead>
-      <tbody id="tabla-body"><tr><td colspan="10" class="loading">Cargando activos...</td></tr></tbody>
+      <tbody id="tabla-body"><tr><td colspan="11" class="loading">Cargando activos...</td></tr></tbody>
     </table>
   </div>
 </div>
@@ -408,19 +412,20 @@ function filtrar(){
   const tipo=document.getElementById('f-tipo').value;
   const estado=document.getElementById('f-estado').value;
   const edificio=document.getElementById('f-edificio').value;
-  cargarActivos(new URLSearchParams({q,tipo,estado,edificio}).toString());
+  const cc=document.getElementById('f-cc').value;
+  cargarActivos(new URLSearchParams({q,tipo,estado,edificio,centro_costo:cc}).toString());
 }
 
 const eB={Bueno:'badge-bueno',Regular:'badge-regular',Malo:'badge-malo'};
 
 function renderTabla(){
   if(!activos.length){
-    document.getElementById('tabla-body').innerHTML='<tr><td colspan="10" class="loading">No se encontraron activos</td></tr>';
+    document.getElementById('tabla-body').innerHTML='<tr><td colspan="11" class="loading">No se encontraron activos</td></tr>';
     return;
   }
   document.getElementById('tabla-body').innerHTML=activos.map(a=>`
-    <tr>
-      <td>${a.foto?`<img src="${a.foto}" class="foto-thumb" alt="foto">`:'<span style="color:#ccc;font-size:18px">📷</span>'}</td>
+        <tr id="fila-${a.id}">
+      <td id="cb-col-${a.id}" style="display:none;text-align:center;vertical-align:middle"><input type="checkbox" class="cb-activo activo-cb" value="${a.id}" onchange="onCheckChange(this)"></td>
       <td style="font-weight:700;color:#1F3864">${a.id}</td>
       <td><span class="badge badge-tipo">${a.subtipo||'—'}</span></td>
       <td>${a.marca||''} ${a.modelo||''}</td>
@@ -428,6 +433,7 @@ function renderTabla(){
       <td><span class="badge ${eB[a.estado]||''}">${a.estado||'—'}</span></td>
       <td style="font-size:12px">${a.edificio||''} — ${a.sala||''}</td>
       <td style="font-size:12px">${a.responsable||'—'}</td>
+      <td style="font-size:11px;color:#1F3864">${a.centro_costo||'—'}</td>
       <td style="font-size:12px">$${(a.precio||0).toLocaleString('es-CL')}</td>
       <td><button class="btn-sm" onclick="modoSeleccion?null:abrirPanel('${a.id}')">Ver ficha</button></td>
     </tr>`).join('');
