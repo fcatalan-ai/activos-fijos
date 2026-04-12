@@ -104,6 +104,26 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
         </select>
       </div>
       <div class="fg">
+        <label>Centro de Costo</label>
+        <select id="fil-cc">
+          <option value="">Todos</option>
+          <option>Dirección</option>
+          <option>Unidad Técnica Pedagógica (UTP)</option>
+          <option>Inspectoría General</option>
+          <option>Administración y Finanzas</option>
+          <option>Educación Básica</option>
+          <option>Educación Media</option>
+          <option>Educación Parvularia</option>
+          <option>Orientación</option>
+          <option>Convivencia Escolar</option>
+          <option>Biblioteca / CRA</option>
+          <option>Laboratorio de Ciencias</option>
+          <option>Sala de Computación</option>
+          <option>Educación Física / Deportes</option>
+          <option>PIE (Programa Integración Escolar)</option>
+        </select>
+      </div>
+      <div class="fg">
         <button class="btn-aplicar" onclick="cargarDashboard()">🔍 Aplicar filtros</button>
       </div>
       <div class="fg">
@@ -162,6 +182,18 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
     </div>
   </div>
 
+  <!-- GRÁFICO CENTRO DE COSTO -->
+  <div class="charts-2" style="margin-bottom:16px">
+    <div class="chart-card">
+      <div class="chart-title">Activos por Centro de Costo</div>
+      <div class="chart-wrap" style="height:280px"><canvas id="ch-cc"></canvas></div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Detalle por Centro de Costo</div>
+      <div style="overflow-y:auto;max-height:280px" id="tabla-cc"></div>
+    </div>
+  </div>
+
   <!-- GRÁFICOS FILA 3 — MANTENCIONES -->
   <div class="sec">Mantenciones y costos</div>
   <div class="charts-2">
@@ -202,9 +234,10 @@ function destroyCharts(){
 
 function getFiltros(){
   return {
-    tipo:     document.getElementById('fil-tipo').value,
-    subtipo:  document.getElementById('fil-subtipo').value,
-    edificio: document.getElementById('fil-edificio').value,
+    tipo:          document.getElementById('fil-tipo').value,
+    subtipo:       document.getElementById('fil-subtipo').value,
+    edificio:      document.getElementById('fil-edificio').value,
+    centro_costo:  document.getElementById('fil-cc').value,
   };
 }
 
@@ -212,6 +245,7 @@ function limpiarFiltros(){
   document.getElementById('fil-tipo').value='';
   document.getElementById('fil-subtipo').value='';
   document.getElementById('fil-edificio').value='';
+  document.getElementById('fil-cc').value='';
   document.getElementById('filtro-badge').style.display='none';
   function descargarInforme(){
   const anio = document.getElementById('anio-informe').value;
@@ -228,9 +262,10 @@ async function cargarDashboard(){
 
   // Badge filtro activo
   const partes=[];
-  if(f.tipo)     partes.push(f.tipo.replace('Equipamiento ','Eq. '));
-  if(f.subtipo)  partes.push(f.subtipo);
-  if(f.edificio) partes.push(f.edificio);
+  if(f.tipo)          partes.push(f.tipo.replace('Equipamiento ','Eq. '));
+  if(f.subtipo)       partes.push(f.subtipo);
+  if(f.edificio)      partes.push(f.edificio);
+  if(f.centro_costo)  partes.push(f.centro_costo.split('|').pop().trim());
   const badge = document.getElementById('filtro-badge');
   if(partes.length){
     badge.textContent='🔍 Filtrando: '+partes.join(' · ');
@@ -324,6 +359,32 @@ async function cargarDashboard(){
   tbl+='</tbody></table>';
   document.getElementById('tabla-subtipo').innerHTML = subs_u.length ? tbl
     : '<div class="loading" style="padding:20px">Sin datos de subtipo</div>';
+
+  // Gráfico Centro de Costo
+  const ccData = d.por_cc || [];
+  if(ccData.length && document.getElementById('ch-cc')){
+    charts['cc'] = new Chart(document.getElementById('ch-cc'),{
+      type:'bar',
+      data:{
+        labels:ccData.map(c=>(c.centro_costo||'Sin asignar').replace('Unidad Técnica Pedagógica','UTP').replace('Educación','Ed.').replace('Programa Integración Escolar','PIE').replace('(Programa Integración Escolar)','').replace('Laboratorio','Lab.').replace('Biblioteca','Bib.')),
+        datasets:[{label:'Activos',data:ccData.map(c=>c.n),backgroundColor:ccData.map((_,i)=>COLORS[i%COLORS.length]),borderRadius:5}]
+      },
+      options:{indexAxis:'y',responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false}},
+        scales:{x:{beginAtZero:true,ticks:{font:{size:10},stepSize:1}},y:{ticks:{font:{size:10}}}}}
+    });
+    // Tabla CC
+    let tblCC='<table style="width:100%;border-collapse:collapse;font-size:12px">';
+    tblCC+='<thead><tr><th style="background:#1F3864;color:#fff;padding:7px 10px;text-align:left">Centro de Costo</th><th style="background:#1F3864;color:#fff;padding:7px 10px;text-align:center">Activos</th></tr></thead><tbody>';
+    ccData.forEach((c,i)=>{
+      const bg=i%2===0?'#f8fafc':'#fff';
+      tblCC+=`<tr style="background:${bg}"><td style="padding:6px 10px;font-weight:600;color:#1F3864">${c.centro_costo||'Sin asignar'}</td><td style="padding:6px 10px;text-align:center;font-weight:700">${c.n}</td></tr>`;
+    });
+    tblCC+='</tbody></table>';
+    document.getElementById('tabla-cc').innerHTML=tblCC;
+  } else if(document.getElementById('tabla-cc')){
+    document.getElementById('tabla-cc').innerHTML='<div class="loading" style="padding:20px">Sin datos de Centro de Costo</div>';
+    if(document.getElementById('ch-cc')) document.getElementById('ch-cc').parentElement.innerHTML='<div class="loading" style="padding:20px">Sin datos</div>';
+  }
 
   // Mantenciones por mes
   const meses = d.mant_por_mes||[];
