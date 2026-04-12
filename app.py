@@ -519,10 +519,24 @@ def importar_excel():
             try:
                 v = ws.cell(row=row, column=col).value
                 if v is None: return ''
-                if hasattr(v, 'strftime'): return v.strftime('%d-%m-%Y')
+                # datetime object desde Excel
+                if hasattr(v, 'strftime'):
+                    return v.strftime('%d-%m-%Y')
+                # Numero serial de Excel (fecha almacenada como numero)
+                if col == 11 and isinstance(v, (int, float)) and 40000 < v < 60000:
+                    from datetime import date, timedelta
+                    fecha = date(1899, 12, 30) + timedelta(days=int(v))
+                    return fecha.strftime('%d-%m-%Y')
                 s = str(v).strip()
-                # Limpiar saltos de linea en encabezados que se cuelan
                 s = s.replace('\n', ' ').strip()
+                # Normalizar fecha DD-MM-YYYY o YYYY-MM-DD o DD/MM/YYYY
+                if col == 11 and s:
+                    partes = s.replace('/','-').split('-')
+                    if len(partes) == 3:
+                        if len(partes[0]) == 4:  # YYYY-MM-DD
+                            s = f"{partes[2].zfill(2)}-{partes[1].zfill(2)}-{partes[0]}"
+                        elif len(partes[2]) == 4:  # DD-MM-YYYY ya correcto
+                            s = f"{partes[0].zfill(2)}-{partes[1].zfill(2)}-{partes[2]}"
                 return s
             except: return ''
 
@@ -566,9 +580,15 @@ def importar_excel():
                         fecha = f"{partes[2]}-{partes[1]}-{partes[0]}"
 
                 # Precio
-                precio_raw = gv(row_num, 12)
+                # Precio - puede venir como int/float directamente
+                precio_cell = ws.cell(row=row_num, column=12).value
                 try:
-                    precio = float(str(precio_raw).replace('.','').replace(',','.').replace('$','')) if precio_raw else 0
+                    if isinstance(precio_cell, (int, float)):
+                        precio = float(precio_cell)
+                    elif precio_cell:
+                        precio = float(str(precio_cell).replace('.','').replace(',','.').replace('$',''))
+                    else:
+                        precio = 0
                 except: precio = 0
 
                 # Vida útil
