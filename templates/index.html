@@ -300,10 +300,11 @@ tr:hover td{background:#f8fafc}
     <h3 style="color:#27500A">📤 Importar Activos desde Excel</h3>
     <p style="font-size:13px;color:#555;margin-bottom:16px">Sube la plantilla Excel completada para cargar todos los activos de una vez.</p>
     <div style="background:#E2EFDA;border:1px solid #70AD47;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#27500A">
-      ✅ Usa la plantilla oficial <strong>PLANTILLA_CARGA_ACTIVOS.xlsx</strong><br>
-      ✅ Completa la hoja <strong>CARGA_ACTIVOS</strong><br>
-      ✅ Los campos Tipo, Estado y Edificio deben usar las listas desplegables<br>
-      ✅ Deja la columna ID vacía — se asigna automáticamente
+      ✅ Usa la plantilla <strong>PLANTILLA_CARGA_ACTIVOS_v4.xlsx</strong><br>
+      ✅ Completa la hoja <strong>ACTIVOS</strong> (datos desde fila 4)<br>
+      ✅ Usa las listas desplegables en: Tipo (col A), Estado (col F), Edificio (col G), Centro de Costo (col J)<br>
+      ✅ La columna ID se asigna automáticamente — déjala vacía<br>
+      ✅ Fecha en formato <strong>DD-MM-YYYY</strong> (col K) — formatea la columna como Texto en Excel
     </div>
     <div class="foto-upload-area" onclick="document.getElementById('excel-input').click()" id="excel-drop-area">
       <input type="file" id="excel-input" accept=".xlsx,.xls" onchange="previewExcel()">
