@@ -264,7 +264,7 @@ def logout():
 @app.route('/')
 @login_required
 def index():
-    return render_template('index.html', user=session['user'], rol=session['rol'], tipos=TIPOS)
+    return render_template('index.html', user=session['user'], rol=session['rol'], tipos=TIPOS, centros_costo=CENTROS_COSTO, edificios=['Básica','Media','Parvularia','Administración'])
 
 @app.route('/api/activos', methods=['GET'])
 @login_required
@@ -489,19 +489,19 @@ def importar_excel():
         # Buscar hoja CARGA_ACTIVOS
         ws = None
         for name in wb.sheetnames:
-            if 'CARGA' in name.upper():
+            if 'ACTIVOS' in name.upper() or 'CARGA' in name.upper():
                 ws = wb[name]; break
         if ws is None:
-            ws = wb.worksheets[1] if len(wb.worksheets) > 1 else wb.active
+            ws = wb.worksheets[0]
 
-        # Columnas fijas segun plantilla oficial (fila 3 = encabezados, datos desde fila 4)
-        # Col 1=ID(vacio), 2=Tipo, 3=Subtipo, 4=Marca, 5=Modelo, 6=Serie
-        # Col 7=Estado, 8=Edificio, 9=Sala, 10=Responsable, 11=Fecha
-        # Col 12=Precio, 13=Documento, 14=VidaUtil, 15=Observaciones
+        # Columnas plantilla v2 (fila 3=encabezados, datos desde fila 4)
+        # A=Tipo, B=Subtipo, C=Marca, D=Modelo, E=Serie, F=Estado
+        # G=Edificio, H=Sala, I=Responsable, J=CentroCosto
+        # K=FechaCompra, L=Precio, M=Documento, N=VidaUtil, O=Observaciones
         COL = {
-            'tipo': 2, 'subtipo': 3, 'marca': 4, 'modelo': 5,
-            'serie': 6, 'estado': 7, 'edificio': 8, 'sala': 9,
-            'responsable': 10, 'fecha': 11, 'precio': 12,
+            'tipo': 1, 'subtipo': 2, 'marca': 3, 'modelo': 4,
+            'serie': 5, 'estado': 6, 'edificio': 7, 'sala': 8,
+            'responsable': 9, 'cc': 10, 'fecha': 11, 'precio': 12,
             'documento': 13, 'vida': 14, 'obs': 15
         }
 
@@ -547,10 +547,19 @@ def importar_excel():
                 serie  = gv(row_num, 'serie')
                 sala   = gv(row_num, 'sala')
                 resp   = gv(row_num, 'responsable')
+                cc     = gv(row_num, 'cc')
                 fecha  = gv(row_num, 'fecha')
                 doc    = gv(row_num, 'documento')
                 obs    = gv(row_num, 'obs')
                 usu    = session['user']
+
+                # Normalizar fecha si viene como datetime de Excel
+                if fecha and hasattr(ws.cell(row=row_num, column=COL['fecha']).value, 'strftime'):
+                    fecha = ws.cell(row=row_num, column=COL['fecha']).value.strftime('%d-%m-%Y')
+                elif fecha and '-' in str(fecha):
+                    parts = str(fecha).split('-')
+                    if len(parts)==3 and len(parts[0])==4:
+                        fecha = f"{parts[2]}-{parts[1]}-{parts[0]}"  # YYYY-MM-DD → DD-MM-YYYY
 
                 # Generar ID con conexion separada
                 aid = next_id(fecha)
@@ -559,8 +568,8 @@ def importar_excel():
                 cur2 = conn2.cursor()
                 if mode2 == 'pg':
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                        (str(aid),str(tipo),str(subtipo),str(marca),str(modelo),str(serie),str(estado),str(edificio),str(sala),str(resp),str(fecha),float(precio),str(doc),int(vida),str(obs),'')
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        (str(aid),str(tipo),str(subtipo),str(marca),str(modelo),str(serie),str(estado),str(edificio),str(sala),str(resp),str(fecha),float(precio),str(doc),int(vida),str(obs),'',str(cc))
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
@@ -568,8 +577,8 @@ def importar_excel():
                     )
                 else:
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,vida,obs,'')
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,vida,obs,'',cc)
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
