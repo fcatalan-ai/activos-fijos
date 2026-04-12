@@ -204,7 +204,7 @@ with app.app_context():
         print(f"Migracion mantenciones: {e_m}")
 
 def next_id(fecha_compra=None):
-    # Usar año de fecha de compra si viene, sino año actual
+    # Determinar año de compra para el prefijo
     year = datetime.now().year % 100
     if fecha_compra:
         try:
@@ -214,9 +214,8 @@ def next_id(fecha_compra=None):
                     break
                 except: pass
         except: pass
-    # Buscar el correlativo mas alto para ESE año
-    prefix = f"AF-{year:02d}-"
-    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE ?", (f"AF-{year:02d}-%",))
+    # Correlativo GLOBAL — buscar el mayor en TODOS los activos AF-XX-XXXX
+    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE 'AF-%'")
     nums = []
     for r in rows:
         parts = r['id'].split('-')
