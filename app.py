@@ -834,6 +834,7 @@ def get_kpis():
     por_estado = db_fetchall(f"SELECT estado, COUNT(*) as n FROM activos{filtro} GROUP BY estado", params)
     por_tipo   = db_fetchall(f"SELECT tipo, COUNT(*) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
     por_edificio=db_fetchall(f"SELECT edificio, COUNT(*) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
+    por_cc     =db_fetchall(f"SELECT centro_costo, COUNT(*) as n FROM activos{filtro} WHERE centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
     totales    = db_fetchone(f"SELECT COUNT(*) as total, COALESCE(SUM(precio),0) as valor FROM activos{filtro}", params)
     # Costo total mantenciones
     costo_mant = db_fetchone(
@@ -896,6 +897,7 @@ def get_kpis():
 
     return jsonify({
         'por_estado':        por_estado,
+        'por_cc':            por_cc,
         'por_tipo':          por_tipo,
         'por_edificio':      por_edificio,
         'totales':           totales,
