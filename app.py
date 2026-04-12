@@ -485,131 +485,98 @@ def importar_excel():
         import openpyxl
         wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
 
-        # Buscar hoja CARGA_ACTIVOS
+        # Buscar hoja ACTIVOS (plantilla v4), luego CARGA_ACTIVOS (v1), luego primera util
         ws = None
-        # Buscar hoja de datos — priorizar ACTIVOS, luego CARGA, luego primera hoja
         for name in wb.sheetnames:
-            nu = name.upper()
-            if nu == 'ACTIVOS':
+            if name.upper() == 'ACTIVOS':
                 ws = wb[name]; break
         if ws is None:
-            for name in wb.sheetnames:
-                nu = name.upper()
-                if 'CARGA' in nu or 'ACTIVO' in nu:
-                    ws = wb[name]; break
-        if ws is None:
-            # Tomar primera hoja que no sea LISTAS ni REFERENCIA
             for name in wb.sheetnames:
                 nu = name.upper()
                 if 'LISTA' not in nu and 'REFERENCIA' not in nu:
                     ws = wb[name]; break
         if ws is None:
-            ws = wb.worksheets[0]
+            return jsonify({'error': 'No se encontró la hoja de datos en el archivo'}), 400
 
-        # Detectar version de plantilla segun encabezados fila 3
-        # v4: A=Tipo, B=Subtipo, C=Marca, D=Modelo, E=Serie, F=Estado,
-        #     G=Edificio, H=Sala, I=Responsable, J=CentroCosto,
-        #     K=FechaCompra, L=Precio, M=Documento, N=VidaUtil, O=Observaciones
-        # Detectar automaticamente buscando encabezados
-        COL = {}
-        header_map = {
-            'tipo': ['tipo','type'],
-            'subtipo': ['subtipo','sub'],
-            'marca': ['marca','brand'],
-            'modelo': ['modelo','model'],
-            'serie': ['serie','serial','n° serie','n serie'],
-            'estado': ['estado','state'],
-            'edificio': ['edificio','building'],
-            'sala': ['sala','room','dependencia'],
-            'responsable': ['responsable','responsible'],
-            'cc': ['centro de costo','centro costo','cc'],
-            'fecha': ['fecha compra','fecha de compra','fecha'],
-            'precio': ['precio','price'],
-            'documento': ['documento','factura','n° documento','doc'],
-            'vida': ['vida','vida útil','vida util'],
-            'obs': ['observaciones','obs','notas'],
-        }
-        # Leer fila 3 para detectar columnas
-        for col_idx in range(1, 20):
-            val = ws.cell(row=3, column=col_idx).value
-            if val is None: continue
-            val_lower = str(val).lower().strip().replace('\n',' ')
-            for campo, claves in header_map.items():
-                if campo not in COL:
-                    for clave in claves:
-                        if clave in val_lower:
-                            COL[campo] = col_idx
-                            break
-        # Fallback a columnas fijas si no detecta encabezados
-        defaults = {
-            'tipo':1,'subtipo':2,'marca':3,'modelo':4,'serie':5,
-            'estado':6,'edificio':7,'sala':8,'responsable':9,'cc':10,
-            'fecha':11,'precio':12,'documento':13,'vida':14,'obs':15
-        }
-        for campo, col_def in defaults.items():
-            if campo not in COL:
-                COL[campo] = col_def
+        # Columnas fijas plantilla v4 (fila 3=headers, datos desde fila 4)
+        # A=Tipo B=Subtipo C=Marca D=Modelo E=Serie F=Estado
+        # G=Edificio H=Sala I=Responsable J=CentroCosto
+        # K=FechaCompra L=Precio M=Documento N=VidaUtil O=Observaciones
+        # Verificar que la fila 3 tenga encabezados correctos
+        fila_inicio = 4
+        header_tipo = ws.cell(row=3, column=1).value
+        if header_tipo is None or 'tipo' not in str(header_tipo).lower():
+            # Intentar fila 1 o 2 como encabezado
+            for test_row in [1, 2]:
+                val = ws.cell(row=test_row, column=1).value
+                if val and 'tipo' in str(val).lower():
+                    fila_inicio = test_row + 1
+                    break
 
-        def gv(row, campo):
-            col_num = COL.get(campo)
-            if col_num is None: return ''
-            v = ws.cell(row=row, column=col_num).value
-            if v is None: return ''
-            if hasattr(v, 'strftime'): return v.strftime('%d-%m-%Y')
-            return str(v).strip()
+        def gv(row, col):
+            """Leer celda y retornar string limpio"""
+            try:
+                v = ws.cell(row=row, column=col).value
+                if v is None: return ''
+                if hasattr(v, 'strftime'): return v.strftime('%d-%m-%Y')
+                s = str(v).strip()
+                # Limpiar saltos de linea en encabezados que se cuelan
+                s = s.replace('
+', ' ').strip()
+                return s
+            except: return ''
 
         creados = 0
         errores = []
         omitidos = 0
 
-        for row_num in range(4, ws.max_row + 1):
-            tipo     = gv(row_num, 'tipo')
-            subtipo  = gv(row_num, 'subtipo')
-            edificio = gv(row_num, 'edificio')
+        for row_num in range(fila_inicio, min(ws.max_row + 1, 600)):
+            tipo     = gv(row_num, 1)
+            subtipo  = gv(row_num, 2)
 
-            # Fila vacia
+            # Fila vacía — saltar silenciosamente
             if not tipo and not subtipo:
                 omitidos += 1
                 continue
 
-            # Faltan obligatorios
+            # Validar obligatorios
+            edificio = gv(row_num, 7)
             if not tipo or not subtipo or not edificio:
-                errores.append(f"Fila {row_num}: faltan campos (Tipo={tipo!r} Subtipo={subtipo!r} Edificio={edificio!r})")
+                errores.append(f"Fila {row_num}: campos obligatorios vacíos — Tipo={repr(tipo)} Subtipo={repr(subtipo)} Edificio={repr(edificio)}")
                 continue
 
             try:
-                estado = gv(row_num, 'estado') or 'Bueno'
+                marca   = gv(row_num, 3)
+                modelo  = gv(row_num, 4)
+                serie   = gv(row_num, 5)
+                estado  = gv(row_num, 6) or 'Bueno'
                 if estado not in ('Bueno','Regular','Malo'): estado = 'Bueno'
+                sala    = gv(row_num, 8)
+                resp    = gv(row_num, 9)
+                cc      = gv(row_num, 10)
+                fecha   = gv(row_num, 11)
+                doc     = gv(row_num, 13)
+                obs     = gv(row_num, 15)
+                usu     = session['user']
 
-                precio_raw = gv(row_num, 'precio')
+                # Normalizar fecha a DD-MM-YYYY
+                if fecha:
+                    partes = fecha.replace('/','-').split('-')
+                    if len(partes) == 3 and len(partes[0]) == 4:
+                        fecha = f"{partes[2]}-{partes[1]}-{partes[0]}"
+
+                # Precio
+                precio_raw = gv(row_num, 12)
                 try:
                     precio = float(str(precio_raw).replace('.','').replace(',','.').replace('$','')) if precio_raw else 0
                 except: precio = 0
 
-                vida_raw = gv(row_num, 'vida')
+                # Vida útil
+                vida_raw = gv(row_num, 14)
                 try: vida = int(float(vida_raw)) if vida_raw else VIDA_UTIL_SII.get(tipo, 7)
                 except: vida = VIDA_UTIL_SII.get(tipo, 7)
 
-                marca  = gv(row_num, 'marca')
-                modelo = gv(row_num, 'modelo')
-                serie  = gv(row_num, 'serie')
-                sala   = gv(row_num, 'sala')
-                resp   = gv(row_num, 'responsable')
-                cc     = gv(row_num, 'cc')
-                fecha  = gv(row_num, 'fecha')
-                doc    = gv(row_num, 'documento')
-                obs    = gv(row_num, 'obs')
-                usu    = session['user']
-
-                # Normalizar fecha si viene como datetime de Excel
-                if fecha and hasattr(ws.cell(row=row_num, column=COL['fecha']).value, 'strftime'):
-                    fecha = ws.cell(row=row_num, column=COL['fecha']).value.strftime('%d-%m-%Y')
-                elif fecha and '-' in str(fecha):
-                    parts = str(fecha).split('-')
-                    if len(parts)==3 and len(parts[0])==4:
-                        fecha = f"{parts[2]}-{parts[1]}-{parts[0]}"  # YYYY-MM-DD → DD-MM-YYYY
-
-                # Generar ID con conexion separada
+                # Generar ID
                 aid = next_id(fecha)
 
                 conn2, mode2 = get_db()
@@ -617,20 +584,20 @@ def importar_excel():
                 if mode2 == 'pg':
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                        (str(aid),str(tipo),str(subtipo),str(marca),str(modelo),str(serie),str(estado),str(edificio),str(sala),str(resp),str(fecha),float(precio),str(doc),int(vida),str(obs),'',str(cc))
+                        (str(aid),tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,int(vida),obs,'',cc)
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
-                        (str(aid),'Alta',f'Importado Excel fila {row_num}',str(usu))
+                        (str(aid),'Alta',f'Importado Excel — {subtipo} {marca} {modelo}',str(usu))
                     )
                 else:
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,vida,obs,'',cc)
+                        (aid,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,resp,fecha,precio,doc,int(vida),obs,'',cc)
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                        (aid,'Alta',f'Importado Excel fila {row_num}',usu)
+                        (aid,'Alta',f'Importado Excel — {subtipo} {marca} {modelo}',usu)
                     )
                 conn2.commit()
                 conn2.close()
@@ -638,14 +605,23 @@ def importar_excel():
 
             except Exception as e:
                 import traceback
-                errores.append(f"Fila {row_num}: {str(e)} | {traceback.format_exc().splitlines()[-1]}")
+                errores.append(f"Fila {row_num}: {str(e)}")
 
-        msg = f"{creados} activos importados"
-        if omitidos: msg += f", {omitidos} filas vacias omitidas"
-        return jsonify({'ok':True,'creados':creados,'errores':errores,'mensaje':msg})
+        if creados == 0 and not errores:
+            return jsonify({
+                'ok': False,
+                'mensaje': 'No se importó ningún activo. Verifica que la hoja se llame ACTIVOS y los datos estén desde la fila 4.',
+                'errores': []
+            })
+
+        msg = f"{creados} activo{'s' if creados!=1 else ''} importado{'s' if creados!=1 else ''} correctamente"
+        if omitidos: msg += f" ({omitidos} filas vacías omitidas)"
+        return jsonify({'ok': True, 'creados': creados, 'errores': errores[:10], 'mensaje': msg})
 
     except Exception as e:
-        return jsonify({'error':f'Error procesando archivo: {str(e)}'}), 500
+        import traceback
+        return jsonify({'error': f'Error procesando archivo: {str(e)}', 'detalle': traceback.format_exc().splitlines()[-1]}), 500
+
 
 @app.route('/api/activos/<id>/qr')
 @login_required
