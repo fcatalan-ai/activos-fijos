@@ -174,6 +174,7 @@ tr:hover td{background:#f8fafc}
       </div>
       <div class="field-box" style="margin-bottom:12px"><label>Sala / Dependencia</label><div class="val" id="p-sala"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Responsable</label><div class="val" id="p-resp"></div></div>
+      <div class="field-box" style="margin-bottom:12px"><label>Centro de Costo</label><div class="val" id="p-centro-costo" style="font-size:12px;color:#1F3864"></div></div>
       <div class="divider"></div>
       <div class="field-grid">
         <div class="field-box"><label>Fecha compra</label><div class="val" id="p-fecha"></div></div>
@@ -276,6 +277,13 @@ tr:hover td{background:#f8fafc}
     <div class="form-row">
       <div class="form-group"><label>Fecha de compra</label><input id="m-fecha" type="date"></div>
       <div class="form-group"><label>Precio ($)</label><input id="m-precio" type="number" placeholder="0" min="0"></div>
+    </div>
+    <div class="form-group">
+      <label>Centro de Costo</label>
+      <select id="m-centro-costo" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+        <option value="">Sin asignar</option>
+        {% for cc in centros_costo %}<option value="{{ cc }}">{{ cc }}</option>{% endfor %}
+      </select>
     </div>
     <div class="form-group"><label>Observaciones</label><textarea id="m-obs" rows="2" style="resize:vertical"></textarea></div>
     <div class="modal-btns">
@@ -442,6 +450,7 @@ async function abrirPanel(id){
   document.getElementById('p-edificio').textContent=a.edificio||'—';
   document.getElementById('p-sala').textContent=a.sala||'—';
   document.getElementById('p-resp').textContent=a.responsable||'—';
+  document.getElementById('p-centro-costo').textContent=a.centro_costo||'Sin asignar';
   document.getElementById('p-fecha').textContent=a.fecha_compra||'—';
   document.getElementById('p-precio').textContent='$'+(a.precio||0).toLocaleString('es-CL');
   document.getElementById('p-doc').textContent=a.documento||'—';
@@ -538,6 +547,7 @@ function abrirModalNuevo(){
   document.getElementById('m-vida').value=4;
   document.getElementById('m-precio').value='';
   document.getElementById('m-fecha').value='';
+  document.getElementById('m-centro-costo').value='';
   document.getElementById('modal-activo').classList.add('show');
 }
 
@@ -594,6 +604,7 @@ async function guardarActivo(){
     documento:document.getElementById('m-doc').value,
     fecha_compra:document.getElementById('m-fecha').value,
     precio:parseFloat(document.getElementById('m-precio').value)||0,
+    centro_costo:  document.getElementById('m-centro-costo').value,
     observaciones:document.getElementById('m-obs').value,
   };
   const url=id?'/api/activos/'+id:'/api/activos';
