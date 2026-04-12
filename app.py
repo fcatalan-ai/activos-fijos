@@ -521,8 +521,7 @@ def importar_excel():
                 if hasattr(v, 'strftime'): return v.strftime('%d-%m-%Y')
                 s = str(v).strip()
                 # Limpiar saltos de linea en encabezados que se cuelan
-                s = s.replace('
-', ' ').strip()
+                s = s.replace('\n', ' ').strip()
                 return s
             except: return ''
 
