@@ -353,13 +353,13 @@ def crear_activo():
     centro_costo = data.get('centro_costo','')
     db_execute('''INSERT INTO activos
         (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-         fecha_compra,precio,documento,vida_util,observaciones,foto)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+         fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
         (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
          data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
          data.get('edificio'), data.get('sala'), data.get('responsable'),
          data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-         vida, data.get('observaciones',''), data.get('foto','')))
+         vida, data.get('observaciones',''), data.get('foto',''), centro_costo))
     db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                (aid,'Alta','Activo registrado en el sistema',session['user']))
     return jsonify({'id': aid, 'ok': True})
