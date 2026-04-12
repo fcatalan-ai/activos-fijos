@@ -487,26 +487,75 @@ def importar_excel():
 
         # Buscar hoja CARGA_ACTIVOS
         ws = None
+        # Buscar hoja de datos — priorizar ACTIVOS, luego CARGA, luego primera hoja
         for name in wb.sheetnames:
-            if 'ACTIVOS' in name.upper() or 'CARGA' in name.upper():
+            nu = name.upper()
+            if nu == 'ACTIVOS':
                 ws = wb[name]; break
+        if ws is None:
+            for name in wb.sheetnames:
+                nu = name.upper()
+                if 'CARGA' in nu or 'ACTIVO' in nu:
+                    ws = wb[name]; break
+        if ws is None:
+            # Tomar primera hoja que no sea LISTAS ni REFERENCIA
+            for name in wb.sheetnames:
+                nu = name.upper()
+                if 'LISTA' not in nu and 'REFERENCIA' not in nu:
+                    ws = wb[name]; break
         if ws is None:
             ws = wb.worksheets[0]
 
-        # Columnas plantilla v2 (fila 3=encabezados, datos desde fila 4)
-        # A=Tipo, B=Subtipo, C=Marca, D=Modelo, E=Serie, F=Estado
-        # G=Edificio, H=Sala, I=Responsable, J=CentroCosto
-        # K=FechaCompra, L=Precio, M=Documento, N=VidaUtil, O=Observaciones
-        COL = {
-            'tipo': 1, 'subtipo': 2, 'marca': 3, 'modelo': 4,
-            'serie': 5, 'estado': 6, 'edificio': 7, 'sala': 8,
-            'responsable': 9, 'cc': 10, 'fecha': 11, 'precio': 12,
-            'documento': 13, 'vida': 14, 'obs': 15
+        # Detectar version de plantilla segun encabezados fila 3
+        # v4: A=Tipo, B=Subtipo, C=Marca, D=Modelo, E=Serie, F=Estado,
+        #     G=Edificio, H=Sala, I=Responsable, J=CentroCosto,
+        #     K=FechaCompra, L=Precio, M=Documento, N=VidaUtil, O=Observaciones
+        # Detectar automaticamente buscando encabezados
+        COL = {}
+        header_map = {
+            'tipo': ['tipo','type'],
+            'subtipo': ['subtipo','sub'],
+            'marca': ['marca','brand'],
+            'modelo': ['modelo','model'],
+            'serie': ['serie','serial','n° serie','n serie'],
+            'estado': ['estado','state'],
+            'edificio': ['edificio','building'],
+            'sala': ['sala','room','dependencia'],
+            'responsable': ['responsable','responsible'],
+            'cc': ['centro de costo','centro costo','cc'],
+            'fecha': ['fecha compra','fecha de compra','fecha'],
+            'precio': ['precio','price'],
+            'documento': ['documento','factura','n° documento','doc'],
+            'vida': ['vida','vida útil','vida util'],
+            'obs': ['observaciones','obs','notas'],
         }
+        # Leer fila 3 para detectar columnas
+        for col_idx in range(1, 20):
+            val = ws.cell(row=3, column=col_idx).value
+            if val is None: continue
+            val_lower = str(val).lower().strip().replace('\n',' ')
+            for campo, claves in header_map.items():
+                if campo not in COL:
+                    for clave in claves:
+                        if clave in val_lower:
+                            COL[campo] = col_idx
+                            break
+        # Fallback a columnas fijas si no detecta encabezados
+        defaults = {
+            'tipo':1,'subtipo':2,'marca':3,'modelo':4,'serie':5,
+            'estado':6,'edificio':7,'sala':8,'responsable':9,'cc':10,
+            'fecha':11,'precio':12,'documento':13,'vida':14,'obs':15
+        }
+        for campo, col_def in defaults.items():
+            if campo not in COL:
+                COL[campo] = col_def
 
         def gv(row, campo):
-            v = ws.cell(row=row, column=COL[campo]).value
+            col_num = COL.get(campo)
+            if col_num is None: return ''
+            v = ws.cell(row=row, column=col_num).value
             if v is None: return ''
+            if hasattr(v, 'strftime'): return v.strftime('%d-%m-%Y')
             return str(v).strip()
 
         creados = 0
