@@ -128,7 +128,7 @@ tr:hover td{background:#f8fafc}
     <table>
       <thead>
         <tr>
-          <th>Foto</th><th>ID Activo</th><th>Subtipo</th><th>Marca / Modelo</th>
+          <th id="th-cb" style="display:none;width:36px"><input type="checkbox" id="cb-todos" onchange="seleccionarTodos(this)" class="cb-activo"></th><th>Foto</th><th>ID Activo</th><th>Subtipo</th><th>Marca / Modelo</th>
           <th>N° Serie</th><th>Estado</th><th>Edificio / Sala</th><th>Responsable</th><th>Precio</th><th></th>
         </tr>
       </thead>
@@ -428,7 +428,7 @@ function renderTabla(){
       <td style="font-size:12px">${a.edificio||''} — ${a.sala||''}</td>
       <td style="font-size:12px">${a.responsable||'—'}</td>
       <td style="font-size:12px">$${(a.precio||0).toLocaleString('es-CL')}</td>
-      <td><button class="btn-sm" onclick="abrirPanel('${a.id}')">Ver ficha</button></td>
+      <td><button class="btn-sm" onclick="modoSeleccion?null:abrirPanel('${a.id}')">Ver ficha</button></td>
     </tr>`).join('');
 }
 
@@ -834,6 +834,111 @@ async function eliminarActivo(){
     cerrarPanel();
     cargarStats();
     filtrar();
+  }
+}
+
+
+let modoSeleccion = false;
+let seleccionados = new Set();
+
+function toggleModoSeleccion(){
+  modoSeleccion = !modoSeleccion;
+  const btn = document.getElementById('btn-sel-modo');
+  const thCb = document.getElementById('th-cb');
+  const bar = document.getElementById('bulk-bar');
+
+  if(modoSeleccion){
+    btn.textContent='✕ Salir';
+    btn.style.background='#FCEBEB';
+    btn.style.color='#C00';
+    btn.style.borderColor='#C00';
+    thCb.style.display='';
+    document.querySelectorAll('[id^="cb-col-"]').forEach(el=>el.style.display='');
+    // Cerrar panel si está abierto
+    document.getElementById('panel').classList.remove('open');
+    document.getElementById('overlay').classList.remove('show');
+  } else {
+    limpiarSeleccion();
+  }
+}
+
+function limpiarSeleccion(){
+  modoSeleccion = false;
+  seleccionados.clear();
+  document.getElementById('btn-sel-modo').textContent='☑️ Seleccionar';
+  document.getElementById('btn-sel-modo').style.background='';
+  document.getElementById('btn-sel-modo').style.color='';
+  document.getElementById('btn-sel-modo').style.borderColor='';
+  document.getElementById('bulk-bar').classList.remove('show');
+  document.getElementById('th-cb').style.display='none';
+  document.querySelectorAll('[id^="cb-col-"]').forEach(el=>el.style.display='none');
+  document.querySelectorAll('.activo-cb').forEach(cb=>cb.checked=false);
+  document.querySelectorAll('tr.seleccionado').forEach(tr=>tr.classList.remove('seleccionado'));
+  if(document.getElementById('cb-todos')) document.getElementById('cb-todos').checked=false;
+}
+
+function onCheckChange(cb){
+  const id = cb.value;
+  const fila = cb.closest('tr');
+  if(cb.checked){
+    seleccionados.add(id);
+    fila.classList.add('seleccionado');
+  } else {
+    seleccionados.delete(id);
+    fila.classList.remove('seleccionado');
+  }
+  actualizarBarraSeleccion();
+}
+
+function seleccionarTodos(cbTodos){
+  document.querySelectorAll('.activo-cb').forEach(cb=>{
+    cb.checked = cbTodos.checked;
+    const fila = cb.closest('tr');
+    if(cbTodos.checked){
+      seleccionados.add(cb.value);
+      fila.classList.add('seleccionado');
+    } else {
+      seleccionados.delete(cb.value);
+      fila.classList.remove('seleccionado');
+    }
+  });
+  actualizarBarraSeleccion();
+}
+
+function actualizarBarraSeleccion(){
+  const n = seleccionados.size;
+  const bar = document.getElementById('bulk-bar');
+  document.getElementById('bulk-info').textContent = `${n} activo${n!==1?'s':''} seleccionado${n!==1?'s':''}`;
+  if(n > 0){
+    bar.classList.add('show');
+  } else {
+    bar.classList.remove('show');
+  }
+}
+
+async function eliminarSeleccionados(){
+  const n = seleccionados.size;
+  if(n === 0) return;
+  if(!confirm(`¿Eliminar ${n} activo${n>1?'s':''} seleccionado${n>1?'s':''}?\n\nEsta acción no se puede deshacer.`)) return;
+
+  let ok = 0, errores = 0;
+  for(const id of seleccionados){
+    try{
+      const r = await fetch('/api/activos/'+id, {method:'DELETE'});
+      const d = await r.json();
+      if(d.ok) ok++;
+      else errores++;
+    } catch(e){ errores++; }
+  }
+
+  limpiarSeleccion();
+  cargarStats();
+  cargarActivos();
+
+  if(errores === 0){
+    alert(`✅ ${ok} activo${ok>1?'s':''} eliminado${ok>1?'s':''}  correctamente`);
+  } else {
+    alert(`✅ ${ok} eliminados · ❌ ${errores} con error`);
   }
 }
 
