@@ -583,6 +583,7 @@ function abrirModalTraslado(){
   document.getElementById('t-edificio').value=a.edificio||'';
   document.getElementById('t-sala').value='';
   document.getElementById('t-resp').value=a.responsable||'';
+  document.getElementById('t-centro-costo').value=a.centro_costo||'';
   document.getElementById('modal-traslado').classList.add('show');
 }
 
@@ -618,9 +619,10 @@ async function guardarActivo(){
 async function guardarTraslado(){
   if(!activoActual) return;
   const data={
-    edificio:document.getElementById('t-edificio').value,
-    sala:document.getElementById('t-sala').value,
-    responsable:document.getElementById('t-resp').value,
+    edificio:    document.getElementById('t-edificio').value,
+    sala:        document.getElementById('t-sala').value,
+    responsable: document.getElementById('t-resp').value,
+    centro_costo:document.getElementById('t-centro-costo').value,
   };
   await fetch('/api/activos/'+activoActual.id+'/traslado',
     {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
