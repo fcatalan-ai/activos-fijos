@@ -133,12 +133,21 @@ def init_db():
     conn.commit()
     conn.close()
 
+CENTROS_COSTO = ['CC-01 | Dirección', 'CC-02 | Unidad Técnica Pedagógica (UTP)', 'CC-03 | Inspectoría General', 'CC-04 | Administración y Finanzas', 'CC-05 | Educación Básica', 'CC-06 | Educación Media', 'CC-07 | Educación Parvularia', 'CC-08 | Orientación', 'CC-09 | Convivencia Escolar', 'CC-10 | Biblioteca / CRA', 'CC-11 | Laboratorio de Ciencias', 'CC-12 | Sala de Computación', 'CC-13 | Educación Física / Deportes', 'CC-14 | PIE (Programa Integración Escolar)']
+
 with app.app_context():
     init_db()
     # Migracion: crear tabla mantenciones si no existe
     try:
         conn_m, mode_m = get_db()
         cur_m = conn_m.cursor()
+        # Agregar columna centro_costo si no existe
+        try:
+            if mode_m == 'pg':
+                cur_m.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
+            else:
+                cur_m.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
+        except: pass
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -341,6 +350,7 @@ def crear_activo():
     data = request.json
     aid = next_id(data.get('fecha_compra',''))
     vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
+    centro_costo = data.get('centro_costo','')
     db_execute('''INSERT INTO activos
         (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
          fecha_compra,precio,documento,vida_util,observaciones,foto)
@@ -385,15 +395,30 @@ def eliminar_activo(id):
     return jsonify({'ok': True})
 
 @app.route('/api/activos/<id>/traslado', methods=['POST'])
-@admin_required
+@login_required
 def traslado(id):
     data = request.json
-    old = db_fetchone("SELECT edificio,sala,responsable FROM activos WHERE id=?", (id,))
-    db_execute("UPDATE activos SET edificio=?,sala=?,responsable=? WHERE id=?",
-               (data['edificio'],data['sala'],data.get('responsable',''),id))
-    desc = f"Traslado: {old['sala']} → {data['sala']} | Responsable: {data.get('responsable','—')}"
+    old = db_fetchone("SELECT edificio,sala,responsable,centro_costo FROM activos WHERE id=?", (id,))
+    new_edificio   = data.get('edificio', old['edificio'] or '')
+    new_sala       = data.get('sala', old['sala'] or '')
+    new_resp       = data.get('responsable', old['responsable'] or '')
+    new_cc         = data.get('centro_costo', old.get('centro_costo','') or '')
+
+    # Descripcion detallada del traslado
+    from_ubicacion = f"{old['edificio'] or '—'} — {old['sala'] or '—'}"
+    to_ubicacion   = f"{new_edificio} — {new_sala}"
+    old_resp       = old['responsable'] or '—'
+    old_cc         = old.get('centro_costo','') or '—'
+    new_cc_label   = new_cc or '—'
+
+    desc = (f"DESDE: {from_ubicacion} | HACIA: {to_ubicacion} | "
+            f"Responsable anterior: {old_resp} → Nuevo: {new_resp} | "
+            f"Centro costo: {old_cc} → {new_cc_label}")
+
+    db_execute("UPDATE activos SET edificio=?,sala=?,responsable=?,centro_costo=? WHERE id=?",
+               (new_edificio, new_sala, new_resp, new_cc, id))
     db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-               (id,'Traslado',desc,session['user']))
+               (id, 'Traslado', desc, session['user']))
     return jsonify({'ok': True})
 
 @app.route('/api/activos/<id>/foto', methods=['POST'])
@@ -619,7 +644,7 @@ def ficha_publica(id):
     a = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not a: return "Activo no encontrado", 404
     dep = calcular_depreciacion(a)
-    return render_template('ficha_publica.html', a=a, dep=dep)
+    return render_template('ficha_publica.html', a=a, dep=dep, centros=CENTROS_COSTO, edificios=['Básica','Media','Parvularia','Administración'])
 
 @app.route('/api/stats')
 @login_required
@@ -1362,6 +1387,16 @@ def export_informe_anual():
     fname = f"Informe_Activos_Fijos_{anio}.xlsx"
     return send_file(buf, download_name=fname, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+
+@app.route('/api/activos/<id>/historial')
+def get_historial_publico(id):
+    if not session.get('pin_ok') and 'user' not in session:
+        return jsonify([])
+    movs = db_fetchall(
+        "SELECT tipo, descripcion, usuario, fecha FROM movimientos WHERE activo_id=? ORDER BY id DESC LIMIT 30",
+        (id,))
+    return jsonify(movs)
 
 if __name__=='__main__':
     init_db()
