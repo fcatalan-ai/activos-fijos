@@ -484,25 +484,23 @@ def importar_excel():
         return jsonify({'error':'Solo se aceptan archivos Excel (.xlsx)'}), 400
     try:
         import openpyxl
-        from datetime import date as dt_date, timedelta
+        from datetime import date as dt_date, timedelta as dt_delta
+
         wb = openpyxl.load_workbook(io.BytesIO(file.read()), data_only=True)
 
         # Buscar hoja ACTIVOS
         ws = None
         for name in wb.sheetnames:
-            nu = name.upper()
-            if nu == 'ACTIVOS':
+            if name.upper() == 'ACTIVOS':
                 ws = wb[name]; break
         if ws is None:
             for name in wb.sheetnames:
-                nu = name.upper()
-                if 'LISTA' not in nu and 'REFERENCIA' not in nu:
+                if 'LISTA' not in name.upper() and 'REFERENCIA' not in name.upper():
                     ws = wb[name]; break
         if ws is None:
-            return jsonify({'error':'No se encontro hoja ACTIVOS'}), 400
+            return jsonify({'error': 'No se encontro hoja ACTIVOS'}), 400
 
-        def celda_str(row, col):
-            """Retorna siempre un string limpio, nunca None"""
+        def leer(row, col):
             v = ws.cell(row=row, column=col).value
             if v is None:
                 return ''
@@ -510,142 +508,163 @@ def importar_excel():
                 return v.strftime('%d-%m-%Y')
             return str(v).strip()
 
-        def celda_fecha(row, col):
-            """Convierte cualquier formato de fecha a DD-MM-YYYY"""
+        def leer_fecha(row, col):
             v = ws.cell(row=row, column=col).value
             if v is None:
                 return ''
-            # Numero serial de Excel
             if isinstance(v, (int, float)) and 30000 < v < 70000:
                 try:
-                    d = dt_date(1899, 12, 30) + timedelta(days=int(v))
-                    return d.strftime('%d-%m-%Y')
+                    return (dt_date(1899, 12, 30) + dt_delta(days=int(v))).strftime('%d-%m-%Y')
                 except:
                     return ''
-            # Objeto datetime/date
             if hasattr(v, 'strftime'):
                 return v.strftime('%d-%m-%Y')
-            # String - normalizar
-            s = str(v).strip()
-            s = s.replace('/', '-')
-            partes = s.split('-')
-            if len(partes) == 3:
-                if len(partes[0]) == 4:  # YYYY-MM-DD
-                    return f"{partes[2].zfill(2)}-{partes[1].zfill(2)}-{partes[0]}"
-                elif len(partes[2]) == 4:  # DD-MM-YYYY
-                    return f"{partes[0].zfill(2)}-{partes[1].zfill(2)}-{partes[2]}"
+            s = str(v).strip().replace('/', '-')
+            p = s.split('-')
+            if len(p) == 3:
+                if len(p[0]) == 4:
+                    return f"{p[2].zfill(2)}-{p[1].zfill(2)}-{p[0]}"
+                if len(p[2]) == 4:
+                    return f"{p[0].zfill(2)}-{p[1].zfill(2)}-{p[2]}"
             return s
 
-        def celda_float(row, col):
-            """Retorna float, nunca None"""
+        def leer_num(row, col):
             v = ws.cell(row=row, column=col).value
-            if v is None:
-                return 0.0
-            if isinstance(v, (int, float)):
-                return float(v)
-            try:
-                return float(str(v).replace('.','').replace(',','.').replace('$',''))
-            except:
-                return 0.0
+            if v is None: return 0.0
+            if isinstance(v, (int, float)): return float(v)
+            try: return float(str(v).replace('.','').replace(',','.').replace('$',''))
+            except: return 0.0
 
-        def celda_int(row, col, default=7):
-            """Retorna int, nunca None"""
+        def leer_int(row, col, default=7):
             v = ws.cell(row=row, column=col).value
-            if v is None:
-                return default
-            if isinstance(v, (int, float)):
-                return int(v)
+            if v is None: return default
+            if isinstance(v, (int, float)): return int(v)
+            try: return int(float(str(v)))
+            except: return default
+
+        # Leer todos los datos primero
+        filas = []
+        for row_num in range(4, min(ws.max_row + 1, 600)):
+            tipo    = leer(row_num, 1)
+            subtipo = leer(row_num, 2)
+            if not tipo and not subtipo:
+                continue
+            filas.append({
+                'row': row_num,
+                'tipo':     tipo,
+                'subtipo':  subtipo,
+                'marca':    leer(row_num, 3),
+                'modelo':   leer(row_num, 4),
+                'serie':    leer(row_num, 5),
+                'estado':   leer(row_num, 6) or 'Bueno',
+                'edificio': leer(row_num, 7),
+                'sala':     leer(row_num, 8),
+                'resp':     leer(row_num, 9),
+                'cc':       leer(row_num, 10),
+                'fecha':    leer_fecha(row_num, 11),
+                'precio':   leer_num(row_num, 12),
+                'doc':      leer(row_num, 13),
+                'vida':     leer_int(row_num, 14, 7),
+                'obs':      leer(row_num, 15),
+            })
+
+        if not filas:
+            return jsonify({'ok': False, 'mensaje': 'No se encontraron datos desde la fila 4', 'errores': []})
+
+        # Abrir UNA sola conexion para todo el proceso
+        conn2, mode2 = get_db()
+        cur2 = conn2.cursor()
+
+        # Obtener el correlativo actual (maximo en la BD)
+        if mode2 == 'pg':
+            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+        else:
+            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+        existing = cur2.fetchall()
+
+        nums = []
+        for row in existing:
             try:
-                return int(float(str(v)))
+                idd = row[0] if isinstance(row, tuple) else list(row.values())[0]
+                parts = str(idd).split('-')
+                if len(parts) >= 3:
+                    nums.append(int(parts[-1]))
             except:
-                return default
+                pass
+        correlativo = max(nums) + 1 if nums else 1000
 
         creados = 0
         errores = []
+        usu = str(session['user'])
 
-        for row_num in range(4, min(ws.max_row + 1, 600)):
-            # Leer tipo y subtipo para detectar fila vacía
-            tipo    = celda_str(row_num, 1)
-            subtipo = celda_str(row_num, 2)
-
-            if not tipo and not subtipo:
-                continue  # fila vacía
-
-            if not tipo or not subtipo:
-                errores.append(f"Fila {row_num}: Tipo o Subtipo vacío")
+        for f in filas:
+            if not f['tipo'] or not f['subtipo']:
+                errores.append(f"Fila {f['row']}: Tipo o Subtipo vacío")
                 continue
-
-            edificio = celda_str(row_num, 7)
-            if not edificio:
-                errores.append(f"Fila {row_num}: Edificio vacío")
+            if not f['edificio']:
+                errores.append(f"Fila {f['row']}: Edificio vacío")
                 continue
 
             try:
-                # Leer todos los campos con tipos correctos
-                marca   = celda_str(row_num, 3)
-                modelo  = celda_str(row_num, 4)
-                serie   = celda_str(row_num, 5)
-                estado  = celda_str(row_num, 6) or 'Bueno'
+                # Determinar año de la fecha
+                fecha = f['fecha']
+                anio = datetime.now().year % 100
+                if fecha and len(fecha) >= 10:
+                    try:
+                        anio = datetime.strptime(fecha[:10], '%d-%m-%Y').year % 100
+                    except:
+                        try:
+                            anio = datetime.strptime(fecha[:10], '%Y-%m-%d').year % 100
+                        except:
+                            pass
+
+                aid = f"AF-{anio:02d}-{correlativo}"
+                correlativo += 1
+
+                estado = f['estado']
                 if estado not in ('Bueno', 'Regular', 'Malo'):
                     estado = 'Bueno'
-                sala    = celda_str(row_num, 8)
-                resp    = celda_str(row_num, 9)
-                cc      = celda_str(row_num, 10)
-                fecha   = celda_fecha(row_num, 11)
-                precio  = celda_float(row_num, 12)
-                doc     = celda_str(row_num, 13)
-                vida    = celda_int(row_num, 14, VIDA_UTIL_SII.get(tipo, 7))
-                obs     = celda_str(row_num, 15)
-                usu     = str(session['user'])
 
-                # Generar ID
-                aid = next_id(fecha)
+                vida = max(1, int(f['vida']))
 
-                # Construir tupla con tipos TODOS correctos para psycopg2
-                params_pg = (
-                    str(aid), str(tipo), str(subtipo), str(marca),
-                    str(modelo), str(serie), str(estado), str(edificio),
-                    str(sala), str(resp), str(fecha), float(precio),
-                    str(doc), int(vida), str(obs), '', str(cc)
-                )
-
-                conn2, mode2 = get_db()
-                cur2 = conn2.cursor()
                 if mode2 == 'pg':
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                        params_pg
+                        (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
+                         str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
+                         str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
+                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
-                        (str(aid), 'Alta', f'Importado Excel — {subtipo} {marca} {modelo}', usu)
+                        (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
                     )
                 else:
                     cur2.execute(
                         "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        params_pg
+                        (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
+                         str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
+                         str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
+                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
                     )
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                        (aid, 'Alta', f'Importado Excel — {subtipo} {marca} {modelo}', usu)
+                        (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
                     )
-                conn2.commit()
-                conn2.close()
                 creados += 1
 
             except Exception as e:
-                import traceback
-                errores.append(f"Fila {row_num}: {str(e)}")
+                errores.append(f"Fila {f['row']}: {str(e)}")
 
-        if creados == 0 and not errores:
-            return jsonify({'ok': False, 'mensaje': 'No se encontraron datos en la hoja ACTIVOS desde la fila 4.', 'errores': []})
+        conn2.commit()
+        conn2.close()
 
         msg = f"{creados} activo{'s' if creados!=1 else ''} importado{'s' if creados!=1 else ''} correctamente"
         return jsonify({'ok': True, 'creados': creados, 'errores': errores[:10], 'mensaje': msg})
 
     except Exception as e:
         import traceback
-        return jsonify({'error': f'Error: {str(e)}', 'detalle': traceback.format_exc()[-300:]}), 500
+        return jsonify({'error': str(e), 'detalle': traceback.format_exc()[-500:]}), 500
 
 
 @app.route('/api/activos/<id>/qr')
