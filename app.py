@@ -218,10 +218,11 @@ def next_id(fecha_compra=None):
     rows = db_fetchall("SELECT id FROM activos WHERE id LIKE 'AF-%'")
     nums = []
     for r in rows:
-        parts = r['id'].split('-')
-        if len(parts) == 3:
-            try: nums.append(int(parts[2]))
-            except: pass
+        try:
+            parts = str(r['id']).split('-')
+            if len(parts) >= 3:
+                nums.append(int(parts[-1]))
+        except: pass
     nxt = max(nums) + 1 if nums else 1000
     return f"AF-{year:02d}-{nxt}"
 
@@ -576,7 +577,10 @@ def importar_excel():
                 except: vida = VIDA_UTIL_SII.get(tipo, 7)
 
                 # Generar ID
-                aid = next_id(fecha)
+                try:
+                    aid = next_id(fecha)
+                except Exception as eid:
+                    aid = next_id()
 
                 conn2, mode2 = get_db()
                 cur2 = conn2.cursor()
@@ -604,7 +608,11 @@ def importar_excel():
 
             except Exception as e:
                 import traceback
-                errores.append(f"Fila {row_num}: {str(e)}")
+                tb = traceback.format_exc()
+                # Get the actual line that failed
+                lines = [l.strip() for l in tb.split('\n') if l.strip() and 'File' in l]
+                loc = lines[-1] if lines else ''
+                errores.append(f"Fila {row_num}: {str(e)} | {loc}")
 
         if creados == 0 and not errores:
             return jsonify({
