@@ -83,6 +83,17 @@ tr:hover td{background:#f8fafc}
 .foto-upload-label{font-size:13px;color:#666;cursor:pointer}
 .foto-upload-label span{color:#2E74B5;font-weight:600}
 .foto-thumb{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #ddd;vertical-align:middle}
+/* SELECCION MULTIPLE */
+tr.seleccionado td{background:#EEF4FF !important}
+.bulk-bar{position:fixed;bottom:-80px;left:50%;transform:translateX(-50%);background:#1F3864;color:#fff;border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:14px;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,0.25);transition:bottom 0.25s;white-space:nowrap}
+.bulk-bar.show{bottom:24px}
+.bulk-bar-info{font-size:13px;font-weight:600}
+.bulk-btn-del{background:#C00;color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer;font-weight:600}
+.bulk-btn-del:hover{background:#a00}
+.bulk-btn-cancel{background:rgba(255,255,255,0.15);color:#fff;border:none;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer}
+.bulk-btn-cancel:hover{background:rgba(255,255,255,0.25)}
+.btn-sel{background:#fff;color:#1F3864;border:1px solid #1F3864;padding:8px 14px;border-radius:8px;font-size:13px;cursor:pointer;white-space:nowrap;font-weight:600}
+.btn-sel:hover{background:#f0f4f8}
 </style>
 </head>
 <body>
@@ -125,6 +136,7 @@ tr:hover td{background:#f8fafc}
     <button class="btn-export" onclick="window.location='/api/export/excel'">📥 Exportar Excel</button>
     {% if rol == 'admin' %}
     <button class="btn-export" style="color:#27500A;border-color:#27500A" onclick="abrirModalImportar()">📤 Importar Excel</button>
+    <button class="btn-sel" id="btn-sel-modo" onclick="toggleModoSeleccion()">☑️ Seleccionar</button>
     <button class="btn-new" onclick="abrirModalNuevo()">+ Nuevo activo</button>
     {% endif %}
   </div>
@@ -142,6 +154,13 @@ tr:hover td{background:#f8fafc}
 </div>
 
 <div class="overlay" id="overlay" onclick="cerrarPanel()"></div>
+
+<!-- BARRA SELECCION MULTIPLE -->
+<div class="bulk-bar" id="bulk-bar">
+  <span class="bulk-bar-info" id="bulk-info">0 seleccionados</span>
+  <button class="bulk-btn-del" onclick="eliminarSeleccionados()">🗑️ Eliminar seleccionados</button>
+  <button class="bulk-btn-cancel" onclick="limpiarSeleccion()">✕ Cancelar</button>
+</div>
 
 <div class="panel" id="panel">
   <div class="panel-head">
