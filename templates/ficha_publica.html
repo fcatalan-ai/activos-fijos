@@ -1,92 +1,250 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
 <title>Ficha — {{ a.id }}</title>
 <style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh;padding:16px}
-.card{background:#fff;border-radius:12px;max-width:480px;margin:0 auto;overflow:hidden;box-shadow:0 2px 16px rgba(0,0,0,0.1)}
-.head{background:#1F3864;color:#fff;padding:16px 20px}
-.head h1{font-size:18px;font-weight:700}
-.head p{font-size:12px;color:#9BB8D8;margin-top:3px}
-.badge{display:inline-block;padding:3px 10px;border-radius:20px;font-size:12px;font-weight:600;margin-top:8px}
-.badge-Bueno{background:#EAF3DE;color:#27500A}
-.badge-Regular{background:#FAEEDA;color:#633806}
-.badge-Malo{background:#FCEBEB;color:#791F1F}
-.foto{width:100%;max-height:220px;object-fit:cover;border-bottom:1px solid #eee}
-.body{padding:20px}
-.section{margin-bottom:16px}
-.section-title{font-size:10px;font-weight:700;color:#999;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #f0f0f0}
-.row{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
-.field label{font-size:11px;color:#999;display:block;margin-bottom:2px}
-.field .val{font-size:14px;font-weight:600;color:#1a1a1a}
-.dep-bar{background:#ddd;border-radius:10px;height:10px;margin:8px 0;overflow:hidden}
-.dep-fill{height:100%;border-radius:10px}
-.footer{background:#f8fafc;padding:12px 20px;text-align:center;font-size:11px;color:#999;border-top:1px solid #eee}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
+.topbar{background:#1F3864;padding:12px 16px;display:flex;align-items:center;justify-content:space-between}
+.topbar h1{color:#fff;font-size:15px;font-weight:700}
+.topbar .sub{color:#9BB8D8;font-size:12px;margin-top:2px}
+.badge-estado{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;display:inline-block;margin-top:4px}
+.badge-bueno{background:#E2EFDA;color:#27500A}
+.badge-regular{background:#FFF2CC;color:#806000}
+.badge-malo{background:#FCEBEB;color:#791F1F}
+.badge-baja{background:#E8E8E8;color:#555;text-decoration:line-through}
+.main{padding:14px;max-width:500px;margin:0 auto}
+/* TABS */
+.tabs{display:flex;gap:0;margin-bottom:14px;border-radius:10px;overflow:hidden;border:1px solid #e5e8ed;background:#fff}
+.tab{flex:1;padding:10px 4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:#fff;color:#888;text-align:center;transition:all 0.15s}
+.tab.active{background:#1F3864;color:#fff}
+.tab:not(:last-child){border-right:1px solid #e5e8ed}
+/* FICHA */
+.card{background:#fff;border-radius:10px;border:1px solid #e5e8ed;padding:14px;margin-bottom:12px}
+.card-title{font-size:11px;font-weight:700;color:#1F3864;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;border-left:3px solid #1F3864;padding-left:8px}
+.field-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.field-box label{font-size:10px;color:#999;text-transform:uppercase;display:block;margin-bottom:2px}
+.field-box .val{font-size:13px;font-weight:600;color:#1a1a1a}
+.field-full{grid-column:span 2}
+/* FOTO */
+.foto-wrap{width:100%;border-radius:8px;overflow:hidden;background:#f8f8f8;text-align:center;padding:20px;color:#999;font-size:13px}
+.foto-wrap img{width:100%;border-radius:8px;display:block}
+/* HISTORIAL */
+.mov-item{padding:10px 0;border-bottom:1px solid #f0f0f0}
+.mov-item:last-child{border-bottom:none}
+.mov-tipo{font-weight:700;font-size:12px;color:#1F3864}
+.mov-tipo.traslado{color:#7030A0}
+.mov-desc{font-size:12px;color:#555;margin-top:3px}
+.mov-fecha{font-size:11px;color:#aaa;margin-top:2px}
+.traslado-box{background:#f0f4f8;border-radius:6px;padding:8px;margin-top:6px;font-size:11px}
+.traslado-box div{margin-bottom:3px;color:#444}
+/* TRASLADO FORM */
+.form-group label{font-size:12px;color:#666;display:block;margin-bottom:4px;margin-top:10px}
+.form-group select,.form-group input{width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff}
+.btn-traslado{width:100%;padding:13px;background:#1F3864;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px;touch-action:manipulation}
+.btn-traslado:hover{background:#2E74B5}
+.btn-traslado:disabled{background:#ccc}
+.alert-ok{background:#E2EFDA;color:#27500A;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;margin-top:10px;text-align:center}
+.alert-err{background:#FCEBEB;color:#C00;border-radius:8px;padding:10px 14px;font-size:13px;font-weight:600;margin-top:10px;text-align:center}
+.loading{text-align:center;padding:20px;color:#999;font-size:13px}
+.dep-bar-bg{background:#eee;border-radius:10px;height:8px;margin-top:6px;overflow:hidden}
+.dep-bar{height:100%;border-radius:10px;background:#1F3864}
 </style>
 </head>
 <body>
-<div class="card">
-  <div class="head">
+<div class="topbar">
+  <div>
     <h1>{{ a.id }}</h1>
-    <p>{{ a.tipo }} — {{ a.subtipo }}</p>
-    <span class="badge badge-{{ a.estado }}">{{ a.estado }}</span>
+    <div class="sub">{{ a.subtipo or '' }} — {{ a.marca or '' }}</div>
+    <span class="badge-estado badge-{{ (a.estado or 'bueno')|lower|replace(' ','') }}">{{ a.estado or '—' }}</span>
   </div>
-  {% if a.foto %}
-  <img src="{{ a.foto }}" class="foto" alt="Foto del activo">
-  {% endif %}
-  <div class="body">
-    <div class="section">
-      <div class="section-title">Identificación</div>
-      <div class="row">
-        <div class="field"><label>Marca</label><div class="val">{{ a.marca or '—' }}</div></div>
-        <div class="field"><label>Modelo</label><div class="val">{{ a.modelo or '—' }}</div></div>
-      </div>
-      <div class="field" style="margin-bottom:10px"><label>N° Serie</label><div class="val">{{ a.serie or '—' }}</div></div>
-    </div>
-    <div class="section">
-      <div class="section-title">Ubicación y responsable</div>
-      <div class="row">
-        <div class="field"><label>Edificio</label><div class="val">{{ a.edificio or '—' }}</div></div>
-        <div class="field"><label>Sala</label><div class="val">{{ a.sala or '—' }}</div></div>
-      </div>
-      <div class="field" style="margin-bottom:10px"><label>Responsable</label><div class="val">{{ a.responsable or '—' }}</div></div>
-    </div>
-    <div class="section">
-      <div class="section-title">Datos de compra</div>
-      <div class="row">
-        <div class="field"><label>Fecha compra</label><div class="val">{{ a.fecha_compra or '—' }}</div></div>
-        <div class="field"><label>Precio</label><div class="val">${{ "{:,.0f}".format(a.precio or 0) }}</div></div>
-      </div>
-      <div class="row">
-        <div class="field"><label>Documento</label><div class="val">{{ a.documento or '—' }}</div></div>
-        <div class="field"><label>Vida útil</label><div class="val">{{ a.vida_util or '—' }} años</div></div>
-      </div>
-    </div>
-    {% if dep %}
-    <div class="section">
-      <div class="section-title">Depreciación según SII</div>
-      {% set dep_color = '#791F1F' if dep.estado_dep == 'Depreciado' else ('#C00' if dep.estado_dep == 'Crítico' else ('#ED7D31' if dep.estado_dep == 'Avanzado' else '#27500A')) %}
-      <div style="text-align:center;margin-bottom:10px">
-        <span style="font-size:16px;font-weight:700;color:{{ dep_color }}">{{ dep.estado_dep }}</span>
-        <span style="font-size:13px;color:#888;margin-left:8px">{{ dep.porcentaje_dep }}% depreciado</span>
-      </div>
-      <div class="dep-bar"><div class="dep-fill" style="width:{{ [dep.porcentaje_dep,100]|min }}%;background:{{ dep_color }}"></div></div>
-      <div class="row" style="margin-top:10px">
-        <div class="field"><label>Valor actual</label><div class="val" style="color:{{ dep_color }}">${{ "{:,.0f}".format(dep.valor_actual) }}</div></div>
-        <div class="field"><label>Término vida útil</label><div class="val">{{ dep.fecha_termino }}</div></div>
-      </div>
-    </div>
-    {% endif %}
-    {% if a.observaciones %}
-    <div class="section">
-      <div class="section-title">Observaciones</div>
-      <div style="font-size:13px;color:#555">{{ a.observaciones }}</div>
-    </div>
-    {% endif %}
+  <div style="text-align:right;color:#9BB8D8;font-size:11px">
+    🏫 Colegio<br>Activos Fijos
   </div>
-  <div class="footer">Sistema de Activos Fijos — Colegio</div>
 </div>
+
+<div class="main">
+  <!-- TABS -->
+  <div class="tabs">
+    <button class="tab active" onclick="showTab('ficha',this)">📋 Ficha</button>
+    <button class="tab" onclick="showTab('foto',this)">📷 Foto</button>
+    <button class="tab" onclick="showTab('historial',this)">📜 Historial</button>
+    <button class="tab" onclick="showTab('traslado',this)">🚚 Traslado</button>
+  </div>
+
+  <!-- TAB FICHA -->
+  <div id="tab-ficha">
+    <div class="card">
+      <div class="card-title">Información del activo</div>
+      <div class="field-grid">
+        <div class="field-box"><label>ID Activo</label><div class="val">{{ a.id }}</div></div>
+        <div class="field-box"><label>Estado</label><div class="val">{{ a.estado or '—' }}</div></div>
+        <div class="field-box"><label>Tipo</label><div class="val">{{ a.tipo or '—' }}</div></div>
+        <div class="field-box"><label>Subtipo</label><div class="val">{{ a.subtipo or '—' }}</div></div>
+        <div class="field-box"><label>Marca</label><div class="val">{{ a.marca or '—' }}</div></div>
+        <div class="field-box"><label>Modelo</label><div class="val">{{ a.modelo or '—' }}</div></div>
+        <div class="field-box field-full"><label>N° Serie</label><div class="val">{{ a.serie or '—' }}</div></div>
+        <div class="field-box"><label>Edificio</label><div class="val">{{ a.edificio or '—' }}</div></div>
+        <div class="field-box"><label>Sala</label><div class="val">{{ a.sala or '—' }}</div></div>
+        <div class="field-box field-full"><label>Responsable</label><div class="val">{{ a.responsable or '—' }}</div></div>
+        {% if a.centro_costo %}
+        <div class="field-box field-full"><label>Centro de Costo</label><div class="val">{{ a.centro_costo }}</div></div>
+        {% endif %}
+        <div class="field-box"><label>Fecha Compra</label><div class="val">{{ a.fecha_compra or '—' }}</div></div>
+        <div class="field-box"><label>Precio</label><div class="val">${{ "{:,.0f}".format(a.precio or 0).replace(',','.') }}</div></div>
+      </div>
+    </div>
+
+    {% if dep %}
+    <div class="card">
+      <div class="card-title">Depreciación</div>
+      <div class="field-grid">
+        <div class="field-box"><label>Valor actual</label><div class="val" style="color:#1F3864">${{ "{:,.0f}".format(dep.valor_actual or 0).replace(',','.') }}</div></div>
+        <div class="field-box"><label>Depreciado</label><div class="val" style="color:#C00">{{ "%.1f"|format(dep.porcentaje or 0) }}%</div></div>
+      </div>
+      <div class="dep-bar-bg">
+        <div class="dep-bar" style="width:{{ [dep.porcentaje or 0, 100]|min }}%;background:{{ '#C00' if (dep.porcentaje or 0) >= 80 else '#ED7D31' if (dep.porcentaje or 0) >= 50 else '#1F3864' }}"></div>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+
+  <!-- TAB FOTO -->
+  <div id="tab-foto" style="display:none">
+    <div class="card">
+      <div class="card-title">Foto del activo</div>
+      {% if a.foto %}
+      <div class="foto-wrap"><img src="{{ a.foto }}" alt="Foto {{ a.id }}"></div>
+      {% else %}
+      <div class="foto-wrap">📷<br>Sin foto registrada</div>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- TAB HISTORIAL -->
+  <div id="tab-historial" style="display:none">
+    <div class="card">
+      <div class="card-title">Historial de movimientos</div>
+      <div id="historial-list"><div class="loading">Cargando...</div></div>
+    </div>
+  </div>
+
+  <!-- TAB TRASLADO -->
+  <div id="tab-traslado" style="display:none">
+    <div class="card">
+      <div class="card-title">Registrar traslado</div>
+      <div style="background:#FFF2CC;border-radius:8px;padding:10px;font-size:12px;color:#806000;margin-bottom:10px">
+        ⚠️ Ubic. actual: <strong>{{ a.edificio or '—' }} — {{ a.sala or '—' }}</strong><br>
+        👤 Responsable: <strong>{{ a.responsable or '—' }}</strong>
+      </div>
+      <div class="form-group">
+        <label>Nuevo edificio *</label>
+        <select id="t-edificio">
+          <option value="">Seleccionar...</option>
+          {% for e in edificios %}<option value="{{ e }}" {{ 'selected' if a.edificio==e }}>{{ e }}</option>{% endfor %}
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Nueva sala / ubicación</label>
+        <input id="t-sala" placeholder="Ej: Sala 12, Lab. Computación..." value="{{ a.sala or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Nuevo responsable *</label>
+        <input id="t-resp" placeholder="Nombre completo" value="{{ a.responsable or '' }}">
+      </div>
+      <div class="form-group">
+        <label>Centro de Costo</label>
+        <select id="t-cc">
+          <option value="">Sin cambio</option>
+          {% for cc in centros %}<option value="{{ cc }}" {{ 'selected' if a.centro_costo==cc }}>{{ cc }}</option>{% endfor %}
+        </select>
+      </div>
+      <button class="btn-traslado" onclick="registrarTraslado()">🚚 Confirmar traslado</button>
+      <div id="t-resultado"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const ACTIVO_ID = "{{ a.id }}";
+
+function showTab(tab, btn){
+  ['ficha','foto','historial','traslado'].forEach(t=>{
+    document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
+  });
+  document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+  if(tab==='historial') cargarHistorial();
+}
+
+async function cargarHistorial(){
+  const el = document.getElementById('historial-list');
+  try{
+    const r = await fetch('/api/activos/'+ACTIVO_ID+'/historial');
+    const movs = await r.json();
+    if(!movs.length){ el.innerHTML='<div class="loading">Sin movimientos registrados</div>'; return; }
+    el.innerHTML = movs.map(m=>{
+      const isTraslado = m.tipo==='Traslado';
+      let descHtml = m.descripcion || '';
+      if(isTraslado){
+        const desc = m.descripcion || '';
+        const desde = desc.match(/DESDE: ([^|]+)/)?.[1]?.trim() || '—';
+        const hacia = desc.match(/HACIA: ([^|]+)/)?.[1]?.trim() || '—';
+        const respAnterior = desc.match(/Responsable anterior: ([^→]+)/)?.[1]?.trim() || '—';
+        const respNuevo = desc.match(/→ Nuevo: ([^|]+)/)?.[1]?.trim() || '—';
+        const ccMatch = desc.match(/Centro costo: (.+)$/)?.[1]?.trim() || '';
+        descHtml = `<div class="traslado-box">
+          <div>📍 <b>Desde:</b> ${desde}</div>
+          <div>📍 <b>Hacia:</b> ${hacia}</div>
+          <div>👤 <b>Responsable:</b> ${respAnterior} → ${respNuevo}</div>
+          ${ccMatch?`<div>🏷️ <b>Centro costo:</b> ${ccMatch}</div>`:''}
+        </div>`;
+      }
+      return `<div class="mov-item">
+        <div class="mov-tipo ${isTraslado?'traslado':''}">${isTraslado?'🚚':'📌'} ${m.tipo}</div>
+        <div class="mov-desc">${descHtml}</div>
+        <div class="mov-fecha">${m.fecha||''} · ${m.usuario||''}</div>
+      </div>`;
+    }).join('');
+  }catch(e){
+    el.innerHTML='<div class="loading">Error al cargar historial</div>';
+  }
+}
+
+async function registrarTraslado(){
+  const edificio = document.getElementById('t-edificio').value;
+  const sala     = document.getElementById('t-sala').value;
+  const resp     = document.getElementById('t-resp').value;
+  const cc       = document.getElementById('t-cc').value;
+  const res      = document.getElementById('t-resultado');
+
+  if(!edificio){ res.innerHTML='<div class="alert-err">⚠️ Selecciona el edificio destino</div>'; return; }
+  if(!resp)    { res.innerHTML='<div class="alert-err">⚠️ Ingresa el nombre del responsable</div>'; return; }
+
+  const btn = document.querySelector('.btn-traslado');
+  btn.disabled=true; btn.textContent='Registrando...';
+
+  try{
+    const r = await fetch('/api/activos/'+ACTIVO_ID+'/traslado',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({edificio,sala,responsable:resp,centro_costo:cc})
+    });
+    const d = await r.json();
+    if(d.ok){
+      res.innerHTML='<div class="alert-ok">✅ Traslado registrado correctamente</div>';
+      btn.textContent='✅ Traslado registrado';
+    } else {
+      res.innerHTML=`<div class="alert-err">❌ Error: ${d.error||'Intenta nuevamente'}</div>`;
+      btn.disabled=false; btn.textContent='🚚 Confirmar traslado';
+    }
+  }catch(e){
+    res.innerHTML='<div class="alert-err">❌ Sin conexión. Intenta nuevamente.</div>';
+    btn.disabled=false; btn.textContent='🚚 Confirmar traslado';
+  }
+}
+</script>
 </body>
 </html>
