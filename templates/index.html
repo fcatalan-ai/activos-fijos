@@ -561,6 +561,7 @@ function abrirModalEditar(){
   document.getElementById('m-fecha').value=a.fecha_compra||'';
   document.getElementById('m-precio').value=a.precio||'';
   document.getElementById('m-obs').value=a.observaciones||'';
+  document.getElementById('m-centro-costo').value=a.centro_costo||'';
   document.getElementById('modal-activo').classList.add('show');
 }
 
@@ -568,6 +569,7 @@ function abrirModalTraslado(){
   if(!activoActual) return;
   const a=activoActual;
   document.getElementById('t-info').textContent=`Activo: ${a.id} — Ubicación actual: ${a.sala||'—'} (${a.edificio||'—'})`;
+  document.getElementById('t-centro-costo').value=a.centro_costo||'';
   document.getElementById('t-edificio').value=a.edificio||'';
   document.getElementById('t-sala').value='';
   document.getElementById('t-resp').value=a.responsable||'';
