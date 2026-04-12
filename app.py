@@ -133,7 +133,7 @@ def init_db():
     conn.commit()
     conn.close()
 
-CENTROS_COSTO = ['CC-01 | Dirección', 'CC-02 | Unidad Técnica Pedagógica (UTP)', 'CC-03 | Inspectoría General', 'CC-04 | Administración y Finanzas', 'CC-05 | Educación Básica', 'CC-06 | Educación Media', 'CC-07 | Educación Parvularia', 'CC-08 | Orientación', 'CC-09 | Convivencia Escolar', 'CC-10 | Biblioteca / CRA', 'CC-11 | Laboratorio de Ciencias', 'CC-12 | Sala de Computación', 'CC-13 | Educación Física / Deportes', 'CC-14 | PIE (Programa Integración Escolar)']
+CENTROS_COSTO = ['Dirección', 'Unidad Técnica Pedagógica (UTP)', 'Inspectoría General', 'Administración y Finanzas', 'Educación Básica', 'Educación Media', 'Educación Parvularia', 'Orientación', 'Convivencia Escolar', 'Biblioteca / CRA', 'Laboratorio de Ciencias', 'Sala de Computación', 'Educación Física / Deportes', 'PIE (Programa Integración Escolar)']
 
 with app.app_context():
     init_db()
