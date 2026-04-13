@@ -137,7 +137,7 @@ CENTROS_COSTO = ['Dirección', 'Unidad Técnica Pedagógica (UTP)', 'Inspectorí
 
 with app.app_context():
     init_db()
-    # Migracion: agregar centro_costo (commit propio para que no falle silenciosamente)
+    # Migracion centro_costo con commit propio
     try:
         conn_cc, mode_cc = get_db()
         cur_cc = conn_cc.cursor()
@@ -362,8 +362,7 @@ def crear_activo():
             return jsonify({'error': 'No se recibieron datos'}), 400
         aid = next_id(data.get('fecha_compra',''))
         vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
-        centro_costo = data.get('centro_costo') or ''
-        # INSERT sin centro_costo para compatibilidad con BD que no tiene la columna aún
+        centro_costo = data.get('centro_costo','')
         db_execute('''INSERT INTO activos
             (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
              fecha_compra,precio,documento,vida_util,observaciones,foto)
@@ -373,11 +372,11 @@ def crear_activo():
              data.get('edificio'), data.get('sala'), data.get('responsable'),
              data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
              vida, data.get('observaciones',''), data.get('foto','')))
-        # UPDATE separado para centro_costo (columna puede haberse agregado via migración)
+        # Guardar centro_costo por separado (columna agregada por migración)
         try:
             db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (centro_costo, aid))
         except Exception as e_cc:
-            print(f"centro_costo update omitido: {e_cc}")
+            print(f"centro_costo omitido: {e_cc}")
         db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                    (aid,'Alta','Activo registrado en el sistema',session['user']))
         return jsonify({'id': aid, 'ok': True})
@@ -391,19 +390,12 @@ def editar_activo(id):
     data = request.json
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
-    # Campos sin centro_costo para compatibilidad con BD que no tiene la columna
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
               'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
         db_execute(f"UPDATE activos SET {sets} WHERE id=?", list(updates.values())+[id])
-    # centro_costo en UPDATE separado por si la columna no existe aún
-    if 'centro_costo' in data:
-        try:
-            db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (data['centro_costo'], id))
-        except Exception as e_cc:
-            print(f"centro_costo editar omitido: {e_cc}")
     cambios = []
     for c in ['estado','edificio','sala','responsable']:
         if c in data and str(old.get(c,'')) != str(data[c]):
@@ -443,12 +435,8 @@ def traslado(id):
             f"Responsable anterior: {old_resp} → Nuevo: {new_resp} | "
             f"Centro costo: {old_cc} → {new_cc_label}")
 
-    db_execute("UPDATE activos SET edificio=?,sala=?,responsable=? WHERE id=?",
-               (new_edificio, new_sala, new_resp, id))
-    try:
-        db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (new_cc, id))
-    except Exception as e_cc:
-        print(f"centro_costo traslado omitido: {e_cc}")
+    db_execute("UPDATE activos SET edificio=?,sala=?,responsable=?,centro_costo=? WHERE id=?",
+               (new_edificio, new_sala, new_resp, new_cc, id))
     db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                (id, 'Traslado', desc, session['user']))
     return jsonify({'ok': True})
@@ -661,30 +649,24 @@ def importar_excel():
 
                 if mode2 == 'pg':
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '')
+                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
                     )
-                    try:
-                        cur2.execute("UPDATE activos SET centro_costo=%s WHERE id=%s", (str(f['cc']), str(aid)))
-                    except: pass
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
                         (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
                     )
                 else:
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '')
+                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
                     )
-                    try:
-                        cur2.execute("UPDATE activos SET centro_costo=? WHERE id=?", (str(f['cc']), str(aid)))
-                    except: pass
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                         (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
@@ -1518,17 +1500,17 @@ def migrar_db():
         cur = conn.cursor()
         if mode == 'pg':
             cur.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
-            resultados.append('✅ centro_costo agregada (PostgreSQL)')
+            resultados.append('centro_costo agregada (PostgreSQL)')
         else:
             try:
                 cur.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
-                resultados.append('✅ centro_costo agregada (SQLite)')
+                resultados.append('centro_costo agregada (SQLite)')
             except:
-                resultados.append('ℹ️ centro_costo ya existía (SQLite)')
+                resultados.append('centro_costo ya existia (SQLite)')
         conn.commit()
         conn.close()
     except Exception as e:
-        resultados.append(f'❌ Error: {e}')
+        resultados.append(f'Error: {e}')
     return '<br>'.join(resultados) + '<br><br><a href="/">Volver al inicio</a>'
 
 @app.route('/api/activos/<id>/historial')
