@@ -543,10 +543,48 @@ function renderFotoPanel(foto){
   const el=document.getElementById('foto-contenido');
   if(foto){
     el.innerHTML=`<img src="${foto}" class="foto-preview" alt="Foto del activo">
-      <div style="text-align:center"><a href="${foto}" download="activo.jpg"><button class="btn-sm">⬇️ Descargar foto</button></a></div>`;
+      <div style="display:flex;gap:8px;justify-content:center;margin-top:6px">
+        <a href="${foto}" target="_blank"><button class="btn-sm">🔍 Ver</button></a>
+        <a href="${foto}" download="activo.jpg"><button class="btn-sm">⬇️ Descargar</button></a>
+        ${ES_ADMIN?`<button class="btn-sm" style="color:#c00;border-color:#fcc" onclick="eliminarFoto()">🗑️ Eliminar</button>`:''}
+      </div>`;
   } else {
     el.innerHTML='<div class="loading" style="padding:20px">Sin foto registrada</div>';
   }
+}
+
+async function eliminarFoto(){
+  if(!activoActual) return;
+  if(!confirm('¿Eliminar la foto de este activo?')) return;
+  try {
+    const r = await fetch('/api/activos/'+activoActual.id+'/foto', {method:'DELETE'});
+    const d = await r.json();
+    if(d.ok){
+      activoActual.foto = '';
+      renderFotoPanel('');
+      document.getElementById('foto-status').textContent='✅ Foto eliminada';
+      filtrar();
+    } else {
+      alert('Error: '+d.error);
+    }
+  } catch(e){ alert('Error de conexión'); }
+}
+
+async function eliminarDocumento(tipo){
+  if(!activoActual) return;
+  if(!confirm('¿Eliminar la '+tipo+' de este activo?')) return;
+  try {
+    const r = await fetch('/api/activos/'+activoActual.id+'/documento?tipo='+tipo, {method:'DELETE'});
+    const d = await r.json();
+    if(d.ok){
+      if(tipo==='factura') activoActual.url_factura='';
+      else activoActual.url_oc='';
+      renderDocumentos();
+      document.getElementById('doc-status').textContent='✅ '+tipo.toUpperCase()+' eliminada';
+    } else {
+      alert('Error: '+d.error);
+    }
+  } catch(e){ alert('Error de conexión'); }
 }
 
 async function subirFoto(){
@@ -602,15 +640,23 @@ function renderDocumentos(){
   const factura = activoActual.url_factura || '';
   const oc = activoActual.url_oc || '';
 
-  // Preview en tab foto
+  // Preview factura
   document.getElementById('factura-preview').innerHTML = factura
-    ? `<a href="${factura}" target="_blank" style="font-size:11px;color:#1F3864;font-weight:600">📄 Ver factura →</a>`
+    ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <a href="${factura}" target="_blank" style="font-size:11px;color:#1F3864;font-weight:600">📄 Ver factura →</a>
+        ${ES_ADMIN?`<button class="btn-sm" style="font-size:10px;color:#c00;border-color:#fcc;padding:2px 7px" onclick="eliminarDocumento('factura')">🗑️</button>`:''}
+       </div>`
     : '<span style="font-size:11px;color:#aaa">Sin factura</span>';
+
+  // Preview OC
   document.getElementById('oc-preview').innerHTML = oc
-    ? `<a href="${oc}" target="_blank" style="font-size:11px;color:#1F3864;font-weight:600">📋 Ver OC →</a>`
+    ? `<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+        <a href="${oc}" target="_blank" style="font-size:11px;color:#1F3864;font-weight:600">📋 Ver OC →</a>
+        ${ES_ADMIN?`<button class="btn-sm" style="font-size:10px;color:#c00;border-color:#fcc;padding:2px 7px" onclick="eliminarDocumento('oc')">🗑️</button>`:''}
+       </div>`
     : '<span style="font-size:11px;color:#aaa">Sin OC</span>';
 
-  // Links en ficha
+  // Links en ficha principal
   let links = '';
   if(factura) links += `<a href="${factura}" target="_blank" style="font-size:11px;background:#E6F1FB;color:#0C447C;padding:4px 10px;border-radius:6px;text-decoration:none;font-weight:600">📄 Factura</a>`;
   if(oc) links += `<a href="${oc}" target="_blank" style="font-size:11px;background:#E2EFDA;color:#27500A;padding:4px 10px;border-radius:6px;text-decoration:none;font-weight:600">📋 OC</a>`;
