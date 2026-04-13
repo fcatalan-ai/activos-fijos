@@ -391,12 +391,19 @@ def editar_activo(id):
     data = request.json
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
+    # Campos sin centro_costo para compatibilidad con BD que no tiene la columna
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','centro_costo']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
         db_execute(f"UPDATE activos SET {sets} WHERE id=?", list(updates.values())+[id])
+    # centro_costo en UPDATE separado por si la columna no existe aún
+    if 'centro_costo' in data:
+        try:
+            db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (data['centro_costo'], id))
+        except Exception as e_cc:
+            print(f"centro_costo editar omitido: {e_cc}")
     cambios = []
     for c in ['estado','edificio','sala','responsable']:
         if c in data and str(old.get(c,'')) != str(data[c]):
@@ -436,8 +443,12 @@ def traslado(id):
             f"Responsable anterior: {old_resp} → Nuevo: {new_resp} | "
             f"Centro costo: {old_cc} → {new_cc_label}")
 
-    db_execute("UPDATE activos SET edificio=?,sala=?,responsable=?,centro_costo=? WHERE id=?",
-               (new_edificio, new_sala, new_resp, new_cc, id))
+    db_execute("UPDATE activos SET edificio=?,sala=?,responsable=? WHERE id=?",
+               (new_edificio, new_sala, new_resp, id))
+    try:
+        db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (new_cc, id))
+    except Exception as e_cc:
+        print(f"centro_costo traslado omitido: {e_cc}")
     db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                (id, 'Traslado', desc, session['user']))
     return jsonify({'ok': True})
