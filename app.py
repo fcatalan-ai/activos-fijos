@@ -8,6 +8,16 @@ app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
 
+# Cloudinary config
+import cloudinary
+import cloudinary.uploader
+cloudinary.config(
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME',''),
+    api_key    = os.environ.get('CLOUDINARY_API_KEY',''),
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET',''),
+    secure     = True
+)
+
 TIPOS = [
     'Equipamiento Tecnológico',
     'Equipamiento Audiovisual',
@@ -141,13 +151,14 @@ with app.app_context():
     try:
         conn_m, mode_m = get_db()
         cur_m = conn_m.cursor()
-        # Agregar columna centro_costo si no existe
-        try:
-            if mode_m == 'pg':
-                cur_m.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
-            else:
-                cur_m.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
-        except: pass
+        # Agregar columnas nuevas si no existen
+        for col in ['centro_costo','url_factura','url_oc']:
+            try:
+                if mode_m == 'pg':
+                    cur_m.execute(f"ALTER TABLE activos ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT ''")
+                else:
+                    cur_m.execute(f"ALTER TABLE activos ADD COLUMN {col} TEXT DEFAULT ''")
+            except: pass
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -445,12 +456,55 @@ def subir_foto(id):
     ext = file.filename.rsplit('.',1)[-1].lower()
     if ext not in {'jpg','jpeg','png','gif','webp'}: return jsonify({'error':'Formato no permitido'}), 400
     data = file.read()
-    if len(data) > 5*1024*1024: return jsonify({'error':'Imagen muy grande (máx 5MB)'}), 400
-    b64 = f"data:image/{ext};base64,"+base64.b64encode(data).decode()
-    db_execute("UPDATE activos SET foto=? WHERE id=?", (b64,id))
-    db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-               (id,'Foto','Foto del activo actualizada',session['user']))
-    return jsonify({'ok':True,'foto':b64})
+    if len(data) > 10*1024*1024: return jsonify({'error':'Imagen muy grande (máx 10MB)'}), 400
+    try:
+        # Subir a Cloudinary
+        resultado = cloudinary.uploader.upload(
+            data,
+            folder='activos-fijos',
+            public_id=f'activo_{id}',
+            overwrite=True,
+            resource_type='image'
+        )
+        url_foto = resultado['secure_url']
+        db_execute("UPDATE activos SET foto=? WHERE id=?", (url_foto, id))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (id,'Foto','Foto del activo actualizada',session['user']))
+        return jsonify({'ok':True,'foto':url_foto})
+    except Exception as e:
+        print(f"Error subir foto Cloudinary: {e}")
+        return jsonify({'error':str(e)}), 500
+
+@app.route('/api/activos/<id>/documento', methods=['POST'])
+@admin_required
+def subir_documento(id):
+    tipo_doc = request.args.get('tipo','factura')  # factura u oc
+    if 'archivo' not in request.files: return jsonify({'error':'No se envió archivo'}), 400
+    file = request.files['archivo']
+    ext = file.filename.rsplit('.',1)[-1].lower()
+    if ext not in {'pdf','jpg','jpeg','png'}: return jsonify({'error':'Solo PDF o imagen'}), 400
+    data = file.read()
+    if len(data) > 10*1024*1024: return jsonify({'error':'Archivo muy grande (máx 10MB)'}), 400
+    try:
+        resultado = cloudinary.uploader.upload(
+            data,
+            folder='activos-fijos/documentos',
+            public_id=f'activo_{id}_{tipo_doc}',
+            overwrite=True,
+            resource_type='auto'
+        )
+        url_doc = resultado['secure_url']
+        campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
+        try:
+            db_execute(f"UPDATE activos SET {campo}=? WHERE id=?", (url_doc, id))
+        except:
+            pass
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (id, 'Documento', f'{tipo_doc.upper()} subida/actualizada', session['user']))
+        return jsonify({'ok':True, 'url': url_doc, 'tipo': tipo_doc})
+    except Exception as e:
+        print(f"Error subir documento Cloudinary: {e}")
+        return jsonify({'error':str(e)}), 500
 
 
 @app.route('/api/debug-excel', methods=['POST'])
