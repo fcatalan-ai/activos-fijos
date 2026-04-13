@@ -475,6 +475,37 @@ def subir_foto(id):
         print(f"Error subir foto Cloudinary: {e}")
         return jsonify({'error':str(e)}), 500
 
+@app.route('/api/activos/<id>/foto', methods=['DELETE'])
+@admin_required
+def eliminar_foto(id):
+    try:
+        # Eliminar de Cloudinary
+        try:
+            cloudinary.uploader.destroy(f'activos-fijos/activo_{id}', resource_type='image')
+        except: pass
+        db_execute("UPDATE activos SET foto='' WHERE id=?", (id,))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (id,'Foto','Foto del activo eliminada',session['user']))
+        return jsonify({'ok':True})
+    except Exception as e:
+        return jsonify({'error':str(e)}), 500
+
+@app.route('/api/activos/<id>/documento', methods=['DELETE'])
+@admin_required
+def eliminar_documento(id):
+    tipo_doc = request.args.get('tipo','factura')
+    try:
+        try:
+            cloudinary.uploader.destroy(f'activos-fijos/documentos/activo_{id}_{tipo_doc}', resource_type='raw')
+        except: pass
+        campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
+        db_execute(f"UPDATE activos SET {campo}='' WHERE id=?", (id,))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (id,'Documento',f'{tipo_doc.upper()} eliminada',session['user']))
+        return jsonify({'ok':True})
+    except Exception as e:
+        return jsonify({'error':str(e)}), 500
+
 @app.route('/api/activos/<id>/documento', methods=['POST'])
 @admin_required
 def subir_documento(id):
