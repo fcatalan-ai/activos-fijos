@@ -363,15 +363,21 @@ def crear_activo():
         aid = next_id(data.get('fecha_compra',''))
         vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
         centro_costo = data.get('centro_costo') or ''
+        # INSERT sin centro_costo para compatibilidad con BD que no tiene la columna aún
         db_execute('''INSERT INTO activos
             (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-             fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+             fecha_compra,precio,documento,vida_util,observaciones,foto)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
              data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
              data.get('edificio'), data.get('sala'), data.get('responsable'),
              data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-             vida, data.get('observaciones',''), data.get('foto',''), centro_costo))
+             vida, data.get('observaciones',''), data.get('foto','')))
+        # UPDATE separado para centro_costo (columna puede haberse agregado via migración)
+        try:
+            db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (centro_costo, aid))
+        except Exception as e_cc:
+            print(f"centro_costo update omitido: {e_cc}")
         db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                    (aid,'Alta','Activo registrado en el sistema',session['user']))
         return jsonify({'id': aid, 'ok': True})
