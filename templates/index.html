@@ -616,30 +616,63 @@ function abrirModalTraslado(){
 function cerrarModal(id){ document.getElementById(id).classList.remove('show'); }
 
 async function guardarActivo(){
-  const id=document.getElementById('m-id').value;
-  const data={
-    tipo:document.getElementById('m-tipo').value,
-    subtipo:document.getElementById('m-subtipo').value,
-    marca:document.getElementById('m-marca').value,
-    modelo:document.getElementById('m-modelo').value,
-    serie:document.getElementById('m-serie').value,
-    estado:document.getElementById('m-estado').value,
-    vida_util:parseInt(document.getElementById('m-vida').value)||4,
-    edificio:document.getElementById('m-edificio').value,
-    sala:document.getElementById('m-sala').value,
-    responsable:document.getElementById('m-resp').value,
-    documento:document.getElementById('m-doc').value,
-    fecha_compra:document.getElementById('m-fecha').value,
-    precio:parseFloat(document.getElementById('m-precio').value)||0,
-    centro_costo:  document.getElementById('m-centro-costo').value,
+  // Validacion basica
+  const subtipo = document.getElementById('m-subtipo').value.trim();
+  if(!subtipo){ alert('Advertencia: El campo Subtipo es obligatorio.'); return; }
+
+  const id = document.getElementById('m-id').value;
+  const data = {
+    tipo:         document.getElementById('m-tipo').value,
+    subtipo:      subtipo,
+    marca:        document.getElementById('m-marca').value,
+    modelo:       document.getElementById('m-modelo').value,
+    serie:        document.getElementById('m-serie').value,
+    estado:       document.getElementById('m-estado').value,
+    vida_util:    parseInt(document.getElementById('m-vida').value)||4,
+    edificio:     document.getElementById('m-edificio').value,
+    sala:         document.getElementById('m-sala').value,
+    responsable:  document.getElementById('m-resp').value,
+    documento:    document.getElementById('m-doc').value,
+    fecha_compra: document.getElementById('m-fecha').value,
+    precio:       parseFloat(document.getElementById('m-precio').value)||0,
+    centro_costo: document.getElementById('m-centro-costo').value,
     observaciones:document.getElementById('m-obs').value,
   };
-  const url=id?'/api/activos/'+id:'/api/activos';
-  const r=await fetch(url,{method:id?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-  const d=await r.json();
-  cerrarModal('modal-activo');
-  cargarStats(); filtrar();
-  if(!id && d.id) abrirPanel(d.id);
+
+  // Feedback visual mientras guarda
+  const btnGuardar = document.querySelector('#modal-activo .btn-save');
+  const textoOriginal = btnGuardar.textContent;
+  btnGuardar.disabled = true;
+  btnGuardar.textContent = 'Guardando...';
+
+  try {
+    const url = id ? '/api/activos/'+id : '/api/activos';
+    const r = await fetch(url, {
+      method: id ? 'PUT' : 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(data)
+    });
+
+    if(!r.ok){
+      let msg = 'Error del servidor ('+r.status+')';
+      try { const e = await r.json(); msg = e.error || msg; } catch(x){}
+      alert('No se pudo guardar: '+msg);
+      btnGuardar.disabled = false;
+      btnGuardar.textContent = textoOriginal;
+      return;
+    }
+
+    const d = await r.json();
+    cerrarModal('modal-activo');
+    cargarStats();
+    filtrar();
+    if(!id && d.id) abrirPanel(d.id);
+
+  } catch(e) {
+    alert('Error de conexion al guardar el activo. '+e.message);
+    btnGuardar.disabled = false;
+    btnGuardar.textContent = textoOriginal;
+  }
 }
 
 async function guardarTraslado(){
