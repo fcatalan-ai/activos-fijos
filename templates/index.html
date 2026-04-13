@@ -209,6 +209,7 @@ tr.seleccionado td{background:#EEF4FF !important}
       </div>
       <div class="field-box" style="margin-bottom:12px"><label>Documento / Factura</label><div class="val" id="p-doc"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Observaciones</label><div class="val" id="p-obs" style="font-size:13px;font-weight:400"></div></div>
+      <div id="p-docs-links" style="margin-top:8px;display:flex;gap:8px;flex-wrap:wrap"></div>
       {% if rol == 'admin' %}
       <div style="display:flex;gap:8px;margin-top:14px">
         <button class="btn-sm" style="flex:1" onclick="abrirModalEditar()">✏️ Editar</button>
@@ -225,10 +226,37 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div class="foto-upload-area" style="margin-top:12px" onclick="document.getElementById('foto-input').click()">
         <input type="file" id="foto-input" accept="image/*" onchange="subirFoto()">
         <div class="foto-upload-label">📷 <span>Haz click para subir foto</span><br>
-        <small style="color:#999">JPG, PNG, WEBP — máx 5MB</small></div>
+        <small style="color:#999">JPG, PNG, WEBP — máx 10MB</small></div>
       </div>
       <div id="foto-status" style="font-size:12px;color:#666;margin-top:8px;text-align:center"></div>
       {% endif %}
+
+      <div class="divider" style="margin:14px 0"></div>
+      <div class="section-lbl">Documentos del activo</div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:8px">
+        <div>
+          <div style="font-size:11px;color:#666;margin-bottom:6px;font-weight:600">📄 Factura</div>
+          <div id="factura-preview" style="margin-bottom:6px"></div>
+          {% if rol == 'admin' %}
+          <div class="foto-upload-area" style="padding:10px" onclick="document.getElementById('factura-input').click()">
+            <input type="file" id="factura-input" accept=".pdf,image/*" onchange="subirDocumento('factura')">
+            <div class="foto-upload-label" style="font-size:11px">📎 <span>Subir factura</span><br><small style="color:#999">PDF o imagen</small></div>
+          </div>
+          {% endif %}
+        </div>
+        <div>
+          <div style="font-size:11px;color:#666;margin-bottom:6px;font-weight:600">📋 Orden de Compra</div>
+          <div id="oc-preview" style="margin-bottom:6px"></div>
+          {% if rol == 'admin' %}
+          <div class="foto-upload-area" style="padding:10px" onclick="document.getElementById('oc-input').click()">
+            <input type="file" id="oc-input" accept=".pdf,image/*" onchange="subirDocumento('oc')">
+            <div class="foto-upload-label" style="font-size:11px">📎 <span>Subir OC</span><br><small style="color:#999">PDF o imagen</small></div>
+          </div>
+          {% endif %}
+        </div>
+      </div>
+      <div id="doc-status" style="font-size:12px;color:#666;margin-top:8px;text-align:center"></div>
     </div>
 
     <div id="tab-dep" style="display:none">
@@ -502,6 +530,7 @@ async function abrirPanel(id){
       <div class="hist-date">${m.fecha} — ${m.usuario}</div></div></div>`).join('')
     :'<div class="loading">Sin movimientos registrados</div>';
   renderDepreciacion(d.depreciacion);
+  renderDocumentos();
   cargarMantenciones(id);
   cargarQR(id);
   drawBarcode(id);
@@ -525,19 +554,67 @@ async function subirFoto(){
   const file=document.getElementById('foto-input').files[0];
   if(!file) return;
   const status=document.getElementById('foto-status');
-  status.textContent='Subiendo foto...';
+  status.textContent='⏳ Subiendo foto...';
   const fd=new FormData();
   fd.append('foto',file);
-  const r=await fetch('/api/activos/'+activoActual.id+'/foto',{method:'POST',body:fd});
-  const d=await r.json();
-  if(d.ok){
-    activoActual.foto=d.foto;
-    renderFotoPanel(d.foto);
-    status.textContent='✅ Foto actualizada correctamente';
-    filtrar();
-  } else {
-    status.textContent='❌ Error: '+d.error;
+  try {
+    const r=await fetch('/api/activos/'+activoActual.id+'/foto',{method:'POST',body:fd});
+    const d=await r.json();
+    if(d.ok){
+      activoActual.foto=d.foto;
+      renderFotoPanel(d.foto);
+      status.textContent='✅ Foto actualizada correctamente';
+      filtrar();
+    } else {
+      status.textContent='❌ Error: '+d.error;
+    }
+  } catch(e) {
+    status.textContent='❌ Error de conexión';
   }
+}
+
+async function subirDocumento(tipo){
+  if(!activoActual) return;
+  const inputId = tipo==='factura' ? 'factura-input' : 'oc-input';
+  const file = document.getElementById(inputId).files[0];
+  if(!file) return;
+  const status = document.getElementById('doc-status');
+  status.textContent='⏳ Subiendo '+tipo+'...';
+  const fd = new FormData();
+  fd.append('archivo', file);
+  try {
+    const r = await fetch('/api/activos/'+activoActual.id+'/documento?tipo='+tipo, {method:'POST',body:fd});
+    const d = await r.json();
+    if(d.ok){
+      if(tipo==='factura') activoActual.url_factura = d.url;
+      else activoActual.url_oc = d.url;
+      renderDocumentos();
+      status.textContent='✅ '+tipo.toUpperCase()+' subida correctamente';
+    } else {
+      status.textContent='❌ Error: '+d.error;
+    }
+  } catch(e) {
+    status.textContent='❌ Error de conexión';
+  }
+}
+
+function renderDocumentos(){
+  const factura = activoActual.url_factura || '';
+  const oc = activoActual.url_oc || '';
+
+  // Preview en tab foto
+  document.getElementById('factura-preview').innerHTML = factura
+    ? `<a href="${factura}" target="_blank" style="font-size:11px;color:#1F3864;font-weight:600">📄 Ver factura →</a>`
+    : '<span style="font-size:11px;color:#aaa">Sin factura</span>';
+  document.getElementById('oc-preview').innerHTML = oc
+    ? `<a href="${oc}" target="_blank" style="font-size:11px;color:#1F3864;font-weight:600">📋 Ver OC →</a>`
+    : '<span style="font-size:11px;color:#aaa">Sin OC</span>';
+
+  // Links en ficha
+  let links = '';
+  if(factura) links += `<a href="${factura}" target="_blank" style="font-size:11px;background:#E6F1FB;color:#0C447C;padding:4px 10px;border-radius:6px;text-decoration:none;font-weight:600">📄 Factura</a>`;
+  if(oc) links += `<a href="${oc}" target="_blank" style="font-size:11px;background:#E2EFDA;color:#27500A;padding:4px 10px;border-radius:6px;text-decoration:none;font-weight:600">📋 OC</a>`;
+  document.getElementById('p-docs-links').innerHTML = links;
 }
 
 function cerrarPanel(){
