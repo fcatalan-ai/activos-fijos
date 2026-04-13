@@ -137,17 +137,26 @@ CENTROS_COSTO = ['Dirección', 'Unidad Técnica Pedagógica (UTP)', 'Inspectorí
 
 with app.app_context():
     init_db()
+    # Migracion: agregar centro_costo (commit propio para que no falle silenciosamente)
+    try:
+        conn_cc, mode_cc = get_db()
+        cur_cc = conn_cc.cursor()
+        if mode_cc == 'pg':
+            cur_cc.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
+        else:
+            try:
+                cur_cc.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
+            except: pass
+        conn_cc.commit()
+        conn_cc.close()
+    except Exception as e_cc:
+        print(f"Migracion centro_costo: {e_cc}")
+
     # Migracion: crear tabla mantenciones si no existe
     try:
         conn_m, mode_m = get_db()
         cur_m = conn_m.cursor()
-        # Agregar columna centro_costo si no existe
-        try:
-            if mode_m == 'pg':
-                cur_m.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
-            else:
-                cur_m.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
-        except: pass
+        # centro_costo ya migrado arriba
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -347,22 +356,28 @@ def calcular_depreciacion(a):
 @app.route('/api/activos', methods=['POST'])
 @admin_required
 def crear_activo():
-    data = request.json
-    aid = next_id(data.get('fecha_compra',''))
-    vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
-    centro_costo = data.get('centro_costo','')
-    db_execute('''INSERT INTO activos
-        (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-         fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-        (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
-         data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
-         data.get('edificio'), data.get('sala'), data.get('responsable'),
-         data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-         vida, data.get('observaciones',''), data.get('foto',''), centro_costo))
-    db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-               (aid,'Alta','Activo registrado en el sistema',session['user']))
-    return jsonify({'id': aid, 'ok': True})
+    try:
+        data = request.json
+        if not data:
+            return jsonify({'error': 'No se recibieron datos'}), 400
+        aid = next_id(data.get('fecha_compra',''))
+        vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
+        centro_costo = data.get('centro_costo') or ''
+        db_execute('''INSERT INTO activos
+            (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
+             fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+            (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
+             data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
+             data.get('edificio'), data.get('sala'), data.get('responsable'),
+             data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
+             vida, data.get('observaciones',''), data.get('foto',''), centro_costo))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (aid,'Alta','Activo registrado en el sistema',session['user']))
+        return jsonify({'id': aid, 'ok': True})
+    except Exception as e:
+        print(f"Error crear_activo: {e}")
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/activos/<id>', methods=['PUT'])
 @admin_required
