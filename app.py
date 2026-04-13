@@ -1508,6 +1508,29 @@ def export_informe_anual():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+
+@app.route('/admin/migrar-db')
+@admin_required
+def migrar_db():
+    resultados = []
+    try:
+        conn, mode = get_db()
+        cur = conn.cursor()
+        if mode == 'pg':
+            cur.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
+            resultados.append('✅ centro_costo agregada (PostgreSQL)')
+        else:
+            try:
+                cur.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
+                resultados.append('✅ centro_costo agregada (SQLite)')
+            except:
+                resultados.append('ℹ️ centro_costo ya existía (SQLite)')
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        resultados.append(f'❌ Error: {e}')
+    return '<br>'.join(resultados) + '<br><br><a href="/">Volver al inicio</a>'
+
 @app.route('/api/activos/<id>/historial')
 def get_historial_publico(id):
     if not session.get('pin_ok') and 'user' not in session:
