@@ -371,7 +371,7 @@ def editar_activo(id):
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','centro_costo']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
