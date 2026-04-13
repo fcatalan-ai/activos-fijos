@@ -588,6 +588,18 @@ function abrirModalNuevo(){
   document.getElementById('modal-activo').classList.add('show');
 }
 
+function fechaParaInput(f){
+  if(!f) return '';
+  // Si ya es YYYY-MM-DD lo devuelve igual
+  if(/^\d{4}-\d{2}-\d{2}$/.test(f)) return f;
+  // Si es DD-MM-YYYY lo convierte
+  if(/^\d{2}-\d{2}-\d{4}$/.test(f)){
+    const [d,m,y] = f.split('-');
+    return y+'-'+m+'-'+d;
+  }
+  return f;
+}
+
 function abrirModalEditar(){
   if(!activoActual) return;
   const a=activoActual;
@@ -605,7 +617,8 @@ function abrirModalEditar(){
   document.getElementById('m-sala').value=a.sala||'';
   document.getElementById('m-resp').value=a.responsable||'';
   document.getElementById('m-doc').value=a.documento||'';
-  document.getElementById('m-fecha').value=a.fecha_compra||'';
+  // Convertir fecha DD-MM-YYYY → YYYY-MM-DD para input type=date
+  document.getElementById('m-fecha').value=fechaParaInput(a.fecha_compra||'');
   document.getElementById('m-precio').value=a.precio||'';
   document.getElementById('m-obs').value=a.observaciones||'';
   document.getElementById('m-centro-costo').value=a.centro_costo||'';
