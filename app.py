@@ -650,24 +650,30 @@ def importar_excel():
 
                 if mode2 == 'pg':
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
+                         str(f['doc']), int(vida), str(f['obs']), '')
                     )
+                    try:
+                        cur2.execute("UPDATE activos SET centro_costo=%s WHERE id=%s", (str(f['cc']), str(aid)))
+                    except: pass
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
                         (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
                     )
                 else:
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
+                         str(f['doc']), int(vida), str(f['obs']), '')
                     )
+                    try:
+                        cur2.execute("UPDATE activos SET centro_costo=? WHERE id=?", (str(f['cc']), str(aid)))
+                    except: pass
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                         (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
