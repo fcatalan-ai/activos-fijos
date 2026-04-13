@@ -124,8 +124,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     </select>
     <select id="f-estado" onchange="filtrar()">
       <option value="">Todos los estados</option>
-      <option>Bueno</option><option>Regular</option><option>Malo</option>
-      <option>En Reparación</option><option>De Baja</option>
+      <option>Bueno</option><option>En Reparación</option><option>De Baja</option>
     </select>
     <select id="f-cc" onchange="filtrar()" style="min-width:180px">
       <option value="">Todos los centros</option>
@@ -290,7 +289,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Estado *</label>
-        <select id="m-estado"><option>Bueno</option><option>Regular</option><option>Malo</option><option>En Reparación</option></select></div>
+        <select id="m-estado"><option>Bueno</option><option>En Reparación</option></select></div>
       <div class="form-group"><label>Vida útil (años)</label><input id="m-vida" type="number" value="4" min="1"></div>
     </div>
     <div class="form-row">
@@ -447,7 +446,7 @@ function filtrar(){
   cargarActivos(new URLSearchParams({q,tipo,estado,edificio,centro_costo:cc,anio}).toString());
 }
 
-const eB={Bueno:'badge-bueno',Regular:'badge-regular',Malo:'badge-malo','En Reparación':'badge-reparacion','De Baja':'badge-baja'};
+const eB={Bueno:'badge-bueno','En Reparación':'badge-reparacion','De Baja':'badge-baja',Regular:'badge-regular',Malo:'badge-malo'};
 
 function renderTabla(){
   if(!activos.length){
