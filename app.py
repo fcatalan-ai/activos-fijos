@@ -491,7 +491,8 @@ def subir_documento(id):
             folder='activos-fijos/documentos',
             public_id=f'activo_{id}_{tipo_doc}',
             overwrite=True,
-            resource_type='auto'
+            resource_type='raw',
+            access_mode='public'
         )
         url_doc = resultado['secure_url']
         campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
