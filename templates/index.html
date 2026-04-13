@@ -131,7 +131,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     </select>
     <select id="f-edificio" onchange="filtrar()">
       <option value="">Todos los edificios</option>
-      <option>Básica</option><option>Media</option><option>Parvularia</option>
+      <option>Básica</option><option>Media</option><option>Parvularia</option><option>Administración</option>
     </select>
     <button class="btn-export" onclick="window.location='/api/export/excel'">📥 Exportar Excel</button>
     {% if rol == 'admin' %}
