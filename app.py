@@ -269,18 +269,24 @@ def index():
 @app.route('/api/activos', methods=['GET'])
 @login_required
 def get_activos():
-    q = request.args.get('q','')
-    tipo = request.args.get('tipo','')
-    estado = request.args.get('estado','')
+    q        = request.args.get('q','')
+    tipo     = request.args.get('tipo','')
+    estado   = request.args.get('estado','')
     edificio = request.args.get('edificio','')
+    cc       = request.args.get('centro_costo','')
+    anio     = request.args.get('anio','')
     sql = "SELECT * FROM activos WHERE 1=1"
     params = []
     if q:
         sql += " AND (id LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR responsable LIKE ?)"
         p = f'%{q}%'; params += [p,p,p,p,p]
-    if tipo:     sql += " AND tipo=?";     params.append(tipo)
-    if estado:   sql += " AND estado=?";   params.append(estado)
-    if edificio: sql += " AND edificio=?"; params.append(edificio)
+    if tipo:     sql += " AND tipo=?";          params.append(tipo)
+    if estado:   sql += " AND estado=?";        params.append(estado)
+    if edificio: sql += " AND edificio=?";      params.append(edificio)
+    if cc:       sql += " AND centro_costo=?";  params.append(cc)
+    if anio:
+        sql += " AND (fecha_compra LIKE ? OR fecha_compra LIKE ?)"
+        params += [f'%{anio}', f'{anio}%']
     sql += " ORDER BY id DESC"
     return jsonify(db_fetchall(sql, params))
 
