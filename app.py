@@ -137,26 +137,17 @@ CENTROS_COSTO = ['Dirección', 'Unidad Técnica Pedagógica (UTP)', 'Inspectorí
 
 with app.app_context():
     init_db()
-    # Migracion centro_costo con commit propio
-    try:
-        conn_cc, mode_cc = get_db()
-        cur_cc = conn_cc.cursor()
-        if mode_cc == 'pg':
-            cur_cc.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
-        else:
-            try:
-                cur_cc.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
-            except: pass
-        conn_cc.commit()
-        conn_cc.close()
-    except Exception as e_cc:
-        print(f"Migracion centro_costo: {e_cc}")
-
     # Migracion: crear tabla mantenciones si no existe
     try:
         conn_m, mode_m = get_db()
         cur_m = conn_m.cursor()
-        # centro_costo ya migrado arriba
+        # Agregar columna centro_costo si no existe
+        try:
+            if mode_m == 'pg':
+                cur_m.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
+            else:
+                cur_m.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
+        except: pass
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -224,7 +215,7 @@ def next_id(fecha_compra=None):
                 except: pass
         except: pass
     # Correlativo GLOBAL — buscar el mayor en TODOS los activos AF-XX-XXXX
-    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE ?", ('AF-%',))
     nums = []
     for r in rows:
         try:
@@ -372,7 +363,6 @@ def crear_activo():
              data.get('edificio'), data.get('sala'), data.get('responsable'),
              data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
              vida, data.get('observaciones',''), data.get('foto','')))
-        # Guardar centro_costo por separado (columna agregada por migración)
         try:
             db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (centro_costo, aid))
         except Exception as e_cc:
@@ -597,9 +587,9 @@ def importar_excel():
 
         # Obtener el correlativo actual (maximo en la BD)
         if mode2 == 'pg':
-            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+            cur2.execute("SELECT id FROM activos WHERE id LIKE %s", ('AF-%',))
         else:
-            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+            cur2.execute("SELECT id FROM activos WHERE id LIKE ?", ('AF-%',))
         existing = cur2.fetchall()
 
         nums = []
@@ -1489,29 +1479,6 @@ def export_informe_anual():
     return send_file(buf, download_name=fname, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-
-
-@app.route('/admin/migrar-db')
-@admin_required
-def migrar_db():
-    resultados = []
-    try:
-        conn, mode = get_db()
-        cur = conn.cursor()
-        if mode == 'pg':
-            cur.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
-            resultados.append('centro_costo agregada (PostgreSQL)')
-        else:
-            try:
-                cur.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
-                resultados.append('centro_costo agregada (SQLite)')
-            except:
-                resultados.append('centro_costo ya existia (SQLite)')
-        conn.commit()
-        conn.close()
-    except Exception as e:
-        resultados.append(f'Error: {e}')
-    return '<br>'.join(resultados) + '<br><br><a href="/">Volver al inicio</a>'
 
 @app.route('/api/activos/<id>/historial')
 def get_historial_publico(id):
