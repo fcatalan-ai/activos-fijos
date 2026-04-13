@@ -399,6 +399,12 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div class="form-group"><label>Nueva sala *</label><input id="t-sala" placeholder="Sala / dependencia destino"></div>
     </div>
     <div class="form-group"><label>Nuevo responsable</label><input id="t-resp" placeholder="Nombre del responsable en destino"></div>
+    <div class="form-group"><label>Centro de Costo</label>
+      <select id="t-centro-costo" style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+        <option value="">Sin cambio</option>
+        {% for cc in centros_costo %}<option value="{{ cc }}">{{ cc }}</option>{% endfor %}
+      </select>
+    </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-traslado')">Cancelar</button>
       <button class="btn-save" onclick="guardarTraslado()">Confirmar traslado</button>
@@ -605,7 +611,6 @@ function abrirModalTraslado(){
   if(!activoActual) return;
   const a=activoActual;
   document.getElementById('t-info').textContent=`Activo: ${a.id} — Ubicación actual: ${a.sala||'—'} (${a.edificio||'—'})`;
-  document.getElementById('t-centro-costo').value=a.centro_costo||'';
   document.getElementById('t-edificio').value=a.edificio||'';
   document.getElementById('t-sala').value='';
   document.getElementById('t-resp').value=a.responsable||'';
@@ -656,7 +661,7 @@ async function guardarActivo(){
     if(!r.ok){
       let msg = 'Error del servidor ('+r.status+')';
       try { const e = await r.json(); msg = e.error || msg; } catch(x){}
-      alert('No se pudo guardar: '+msg);
+      alert('No se pudo guardar:\n' + msg + '\n\nRevisa los logs en Render para más detalles.');
       btnGuardar.disabled = false;
       btnGuardar.textContent = textoOriginal;
       return;
