@@ -85,6 +85,12 @@ tr:hover td{background:#f8fafc}
 .foto-upload-label{font-size:13px;color:#666;cursor:pointer}
 .foto-upload-label span{color:#2E74B5;font-weight:600}
 .foto-thumb{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #ddd;vertical-align:middle}
+/* PIN OPERACION */
+.pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #ccc;display:inline-block;transition:all 0.15s}
+.pin-dot.filled{background:#1F3864;border-color:#1F3864}
+.pin-key{height:52px;border-radius:10px;border:1px solid #ddd;background:#f8f8f8;font-size:20px;font-weight:600;cursor:pointer;transition:all 0.1s}
+.pin-key:hover{background:#e8ecf0}
+.pin-key:active{transform:scale(0.94);background:#d0dce8}
 /* SELECCION MULTIPLE */
 tr.seleccionado td{background:#EEF4FF !important}
 .bulk-bar{position:fixed;bottom:-80px;left:50%;transform:translateX(-50%);background:#1F3864;color:#fff;border-radius:12px;padding:12px 20px;display:flex;align-items:center;gap:14px;z-index:300;box-shadow:0 4px 20px rgba(0,0,0,0.25);transition:bottom 0.25s;white-space:nowrap}
@@ -471,6 +477,37 @@ tr.seleccionado td{background:#EEF4FF !important}
   </div>
 </div>
 
+<!-- MODAL PIN OPERACION -->
+<div class="modal-bg" id="modal-pin-op">
+  <div class="modal" style="max-width:320px;text-align:center">
+    <div style="font-size:32px;margin-bottom:8px">🔐</div>
+    <h3 style="color:#1F3864;margin-bottom:6px" id="pin-op-title">Confirmar operación</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:16px" id="pin-op-desc">Ingresa el PIN de 4 dígitos para continuar</p>
+    <div style="display:flex;justify-content:center;gap:10px;margin-bottom:16px" id="pin-op-dots">
+      <div class="pin-dot" id="op-dot-0"></div>
+      <div class="pin-dot" id="op-dot-1"></div>
+      <div class="pin-dot" id="op-dot-2"></div>
+      <div class="pin-dot" id="op-dot-3"></div>
+    </div>
+    <div id="pin-op-error" style="color:#c00;font-size:12px;min-height:16px;margin-bottom:10px"></div>
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;max-width:220px;margin:0 auto">
+      <button class="pin-key" onclick="pinOpAdd('1')">1</button>
+      <button class="pin-key" onclick="pinOpAdd('2')">2</button>
+      <button class="pin-key" onclick="pinOpAdd('3')">3</button>
+      <button class="pin-key" onclick="pinOpAdd('4')">4</button>
+      <button class="pin-key" onclick="pinOpAdd('5')">5</button>
+      <button class="pin-key" onclick="pinOpAdd('6')">6</button>
+      <button class="pin-key" onclick="pinOpAdd('7')">7</button>
+      <button class="pin-key" onclick="pinOpAdd('8')">8</button>
+      <button class="pin-key" onclick="pinOpAdd('9')">9</button>
+      <div></div>
+      <button class="pin-key" onclick="pinOpAdd('0')">0</button>
+      <button class="pin-key" style="color:#c00" onclick="pinOpDel()">⌫</button>
+    </div>
+    <button class="btn-cancel" onclick="cerrarModal('modal-pin-op')" style="margin-top:16px;width:100%">Cancelar</button>
+  </div>
+</div>
+
 <script>
 const ES_ADMIN = {{ 'true' if rol=='admin' else 'false' }};
 let activos = [], activoActual = null;
@@ -782,8 +819,77 @@ function fechaParaInput(f){
   return f;
 }
 
+// ─── PIN OPERACION ───────────────────────────────────────────────────────────
+let pinOpValor = '';
+let pinOpCallback = null;
+
+function pedirPin(titulo, desc, callback){
+  pinOpValor = '';
+  pinOpCallback = callback;
+  document.getElementById('pin-op-title').textContent = titulo;
+  document.getElementById('pin-op-desc').textContent = desc;
+  document.getElementById('pin-op-error').textContent = '';
+  actualizarPinDots();
+  document.getElementById('modal-pin-op').classList.add('show');
+}
+
+function actualizarPinDots(){
+  for(let i=0;i<4;i++){
+    const dot = document.getElementById('op-dot-'+i);
+    dot.className = 'pin-dot' + (i < pinOpValor.length ? ' filled' : '');
+  }
+}
+
+function pinOpAdd(d){
+  if(pinOpValor.length >= 4) return;
+  pinOpValor += d;
+  actualizarPinDots();
+  if(pinOpValor.length === 4) setTimeout(verificarPinOp, 200);
+}
+
+function pinOpDel(){
+  pinOpValor = pinOpValor.slice(0,-1);
+  actualizarPinDots();
+  document.getElementById('pin-op-error').textContent = '';
+}
+
+async function verificarPinOp(){
+  try {
+    const r = await fetch('/api/verificar-pin', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({pin: pinOpValor})
+    });
+    const d = await r.json();
+    if(d.ok){
+      cerrarModal('modal-pin-op');
+      if(pinOpCallback) pinOpCallback();
+    } else {
+      document.getElementById('pin-op-error').textContent = '❌ PIN incorrecto';
+      pinOpValor = '';
+      actualizarPinDots();
+    }
+  } catch(e){
+    document.getElementById('pin-op-error').textContent = '❌ Error de conexión';
+    pinOpValor = '';
+    actualizarPinDots();
+  }
+}
+
+// Teclado físico para el PIN
+document.addEventListener('keydown', e => {
+  if(!document.getElementById('modal-pin-op').classList.contains('show')) return;
+  if(e.key >= '0' && e.key <= '9') pinOpAdd(e.key);
+  else if(e.key === 'Backspace') pinOpDel();
+});
+// ─────────────────────────────────────────────────────────────────────────────
+
 function abrirModalEditar(){
   if(!activoActual) return;
+  pedirPin('✏️ Editar activo', `Confirma el PIN para editar ${activoActual.id}`, _abrirModalEditar);
+}
+
+function _abrirModalEditar(){
   const a=activoActual;
   document.getElementById('modal-title').textContent='Editar Activo — '+a.id;
   document.getElementById('m-id').value=a.id;
@@ -810,6 +916,10 @@ function abrirModalEditar(){
 
 function abrirModalTraslado(){
   if(!activoActual) return;
+  pedirPin('🚚 Registrar traslado', `Confirma el PIN para trasladar ${activoActual.id}`, _abrirModalTraslado);
+}
+
+function _abrirModalTraslado(){
   const a=activoActual;
   document.getElementById('t-info').textContent=`Activo: ${a.id} — Ubicación actual: ${a.sala||'—'} (${a.edificio||'—'})`;
   document.getElementById('t-edificio').value=a.edificio||'';
