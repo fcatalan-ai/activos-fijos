@@ -7,6 +7,7 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
+PIN_OPERACION = os.environ.get('PIN_OPERACION', '0000')
 
 # Cloudinary config
 import cloudinary
@@ -845,24 +846,57 @@ def stats():
 @login_required
 def export_excel():
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    from openpyxl.utils import get_column_letter
     rows = db_fetchall("SELECT * FROM activos ORDER BY id")
-    wb = openpyxl.Workbook(); ws = wb.active; ws.title="Activos Fijos"
-    headers=['ID Activo','Tipo','Subtipo','Marca','Modelo','N° Serie','Estado',
-             'Edificio','Sala','Responsable','Fecha Compra','Precio','Documento','Vida Útil','Observaciones']
-    keys=['id','tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-          'responsable','fecha_compra','precio','documento','vida_util','observaciones']
-    for col,h in enumerate(headers,1):
-        cell=ws.cell(row=1,column=col,value=h)
-        cell.font=Font(bold=True,color='FFFFFF')
-        cell.fill=PatternFill('solid',start_color='1F3864',fgColor='1F3864')
-        cell.alignment=Alignment(horizontal='center')
-        ws.column_dimensions[ws.cell(row=1,column=col).column_letter].width=18
-    for ri,row in enumerate(rows,2):
-        for col,key in enumerate(keys,1):
-            ws.cell(row=ri,column=col,value=row.get(key,''))
-    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
-    return send_file(buf,download_name='activos_fijos.xlsx',as_attachment=True,
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title="Inventario"
+
+    AZUL = '1F3864'; BLANCO = 'FFFFFF'; GRIS = 'F2F2F2'
+    def hdr_fill(): return PatternFill('solid', fgColor=AZUL)
+    def alt_fill(): return PatternFill('solid', fgColor='DEEAF1')
+    def borde():
+        s = Side(style='thin', color='BFBFBF')
+        return Border(left=s, right=s, top=s, bottom=s)
+
+    headers = [
+        ('ID Activo',       14), ('Tipo',            22), ('Subtipo',         18),
+        ('Marca',           14), ('Modelo',          16), ('N° Serie',        18),
+        ('Estado',          12), ('Edificio',        14), ('Sala',            20),
+        ('Responsable',     20), ('Centro de Costo', 26), ('Proveedor',       20),
+        ('Fecha Compra',    14), ('Precio',          14), ('N° Documento',    16),
+        ('Vida Útil (años)',14), ('Observaciones',   28),
+    ]
+    keys = ['id','tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
+            'responsable','centro_costo','proveedor','fecha_compra','precio',
+            'documento','vida_util','observaciones']
+
+    for col,(h,w) in enumerate(headers,1):
+        cell = ws.cell(row=1, column=col, value=h)
+        cell.font = Font(name='Arial', bold=True, color=BLANCO, size=10)
+        cell.fill = hdr_fill()
+        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        cell.border = borde()
+        ws.column_dimensions[get_column_letter(col)].width = w
+    ws.row_dimensions[1].height = 28
+
+    for ri, row in enumerate(rows, 2):
+        bg = alt_fill() if ri % 2 == 0 else PatternFill('solid', fgColor=GRIS)
+        for col, key in enumerate(keys, 1):
+            val = row.get(key, '')
+            # No exportar URLs de fotos/documentos (son largas e inútiles en Excel)
+            if key in ('foto','url_factura','url_oc'): val = '✓' if val else ''
+            cell = ws.cell(row=ri, column=col, value=val)
+            cell.font = Font(name='Arial', size=10)
+            cell.fill = bg
+            cell.border = borde()
+            cell.alignment = Alignment(vertical='center', wrap_text=False)
+        ws.row_dimensions[ri].height = 16
+
+    ws.freeze_panes = 'A2'
+    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
+    from datetime import date
+    fname = f"Inventario_Activos_{date.today().strftime('%Y%m%d')}.xlsx"
+    return send_file(buf, download_name=fname, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
@@ -1577,6 +1611,15 @@ def export_informe_anual():
     return send_file(buf, download_name=fname, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+
+@app.route('/api/verificar-pin', methods=['POST'])
+@login_required
+def verificar_pin():
+    data = request.json
+    pin = str(data.get('pin',''))
+    if pin == PIN_OPERACION:
+        return jsonify({'ok': True})
+    return jsonify({'ok': False, 'error': 'PIN incorrecto'}), 401
 
 @app.route('/api/activos/<id>/historial')
 def get_historial_publico(id):
