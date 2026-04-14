@@ -1433,11 +1433,18 @@ async function subirDocMasivo(){
   }, 2000);
 }
 
-async function eliminarSeleccionados(){
+function eliminarSeleccionados(){
   const n = seleccionados.size;
   if(n === 0) return;
-  if(!confirm(`¿Eliminar ${n} activo${n>1?'s':''} seleccionado${n>1?'s':''}?\n\nEsta acción no se puede deshacer.`)) return;
+  pedirPin(
+    '🗑️ Eliminar seleccionados',
+    `Confirma el PIN para eliminar ${n} activo${n>1?'s':''} — acción irreversible`,
+    _eliminarSeleccionados
+  );
+}
 
+async function _eliminarSeleccionados(){
+  const n = seleccionados.size;
   let ok = 0, errores = 0;
   for(const id of seleccionados){
     try{
@@ -1447,13 +1454,11 @@ async function eliminarSeleccionados(){
       else errores++;
     } catch(e){ errores++; }
   }
-
   limpiarSeleccion();
   cargarStats();
   cargarActivos();
-
   if(errores === 0){
-    alert(`✅ ${ok} activo${ok>1?'s':''} eliminado${ok>1?'s':''}  correctamente`);
+    alert(`✅ ${ok} activo${ok>1?'s':''} eliminado${ok>1?'s':''} correctamente`);
   } else {
     alert(`✅ ${ok} eliminados · ❌ ${errores} con error`);
   }
