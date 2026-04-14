@@ -509,7 +509,7 @@ def eliminar_documento(id):
 @app.route('/api/activos/<id>/documento', methods=['POST'])
 @admin_required
 def subir_documento(id):
-    tipo_doc = request.args.get('tipo','factura')  # factura u oc
+    tipo_doc = request.args.get('tipo','factura')
     if 'archivo' not in request.files: return jsonify({'error':'No se envió archivo'}), 400
     file = request.files['archivo']
     ext = file.filename.rsplit('.',1)[-1].lower()
@@ -517,29 +517,22 @@ def subir_documento(id):
     data = file.read()
     if len(data) > 10*1024*1024: return jsonify({'error':'Archivo muy grande (máx 10MB)'}), 400
     try:
-        es_pdf = file.filename.lower().endswith('.pdf')
         resultado = cloudinary.uploader.upload(
             data,
             folder='activos-fijos/documentos',
             public_id=f'activo_{id}_{tipo_doc}',
             overwrite=True,
-            resource_type='raw' if es_pdf else 'image',
+            resource_type='raw',
             access_mode='public'
         )
         url_doc = resultado['secure_url']
-        # Para PDFs raw, corregir la URL de /image/ a /raw/
-        if es_pdf and '/image/upload/' in url_doc:
-            url_doc = url_doc.replace('/image/upload/', '/raw/upload/')
         campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
-        try:
-            db_execute(f"UPDATE activos SET {campo}=? WHERE id=?", (url_doc, id))
-        except:
-            pass
+        db_execute(f"UPDATE activos SET {campo}=? WHERE id=?", (url_doc, id))
         db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                    (id, 'Documento', f'{tipo_doc.upper()} subida/actualizada', session['user']))
         return jsonify({'ok':True, 'url': url_doc, 'tipo': tipo_doc})
     except Exception as e:
-        print(f"Error subir documento Cloudinary: {e}")
+        print(f"Error subir documento: {e}")
         return jsonify({'error':str(e)}), 500
 
 
