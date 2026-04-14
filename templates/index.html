@@ -341,7 +341,14 @@ tr.seleccionado td{background:#EEF4FF !important}
         {% for cc in centros_costo %}<option value="{{ cc }}">{{ cc }}</option>{% endfor %}
       </select>
     </div>
-    <div class="form-group"><label>Proveedor</label><input id="m-proveedor" placeholder="Ej: Importadora XYZ, Lider, etc."></div>
+    <div class="form-group"><label>Proveedor</label>
+  <select id="m-proveedor">
+    <option value="">Sin proveedor</option>
+    <option>Importadora XYZ</option>
+    <option>Lider</option>
+    <option>Sodimac</option>
+  </select>
+</div>
     <div class="form-group"><label>Observaciones</label><textarea id="m-obs" rows="2" style="resize:vertical"></textarea></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-activo')">Cancelar</button>
