@@ -85,6 +85,15 @@ tr:hover td{background:#f8fafc}
 .foto-upload-label{font-size:13px;color:#666;cursor:pointer}
 .foto-upload-label span{color:#2E74B5;font-weight:600}
 .foto-thumb{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #ddd;vertical-align:middle}
+/* PAGINACION */
+.pag-bar{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:10px 14px;background:#fff;border-top:1px solid #f0f0f0;border-radius:0 0 10px 10px;flex-wrap:wrap}
+.pag-info{font-size:12px;color:#888}
+.pag-btns{display:flex;gap:4px;align-items:center}
+.pag-btn{padding:5px 10px;border-radius:6px;border:1px solid #ddd;background:#fff;font-size:12px;cursor:pointer;color:#1F3864;font-weight:600}
+.pag-btn:hover{background:#f0f4f8}
+.pag-btn.active{background:#1F3864;color:#fff;border-color:#1F3864}
+.pag-btn:disabled{color:#ccc;cursor:not-allowed;background:#f8f8f8}
+.pag-size{padding:5px 8px;border-radius:6px;border:1px solid #ddd;font-size:12px;color:#1F3864;cursor:pointer}
 /* PIN OPERACION */
 .pin-dot{width:16px;height:16px;border-radius:50%;border:2px solid #ccc;display:inline-block;transition:all 0.15s}
 .pin-dot.filled{background:#1F3864;border-color:#1F3864}
@@ -160,6 +169,19 @@ tr.seleccionado td{background:#EEF4FF !important}
       </thead>
       <tbody id="tabla-body"><tr><td colspan="11" class="loading">Cargando activos...</td></tr></tbody>
     </table>
+    <div class="pag-bar" id="pag-bar" style="display:none">
+      <div class="pag-info" id="pag-info"></div>
+      <div class="pag-btns" id="pag-btns"></div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <span style="font-size:12px;color:#888">Mostrar:</span>
+        <select class="pag-size" id="pag-size" onchange="cambiarTamano()">
+          <option value="25">25</option>
+          <option value="50">50</option>
+          <option value="100">100</option>
+          <option value="0">Todos</option>
+        </select>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -529,6 +551,7 @@ async function cargarActivos(params=''){
 }
 
 function filtrar(){
+  paginaActual = 1;
   const q=document.getElementById('buscar').value;
   const tipo=document.getElementById('f-tipo').value;
   const estado=document.getElementById('f-estado').value;
@@ -540,12 +563,26 @@ function filtrar(){
 
 const eB={Bueno:'badge-bueno','En Reparación':'badge-reparacion','De Baja':'badge-baja',Regular:'badge-regular',Malo:'badge-malo'};
 
+let paginaActual = 1;
+let tamañoPagina = 25;
+
 function renderTabla(){
   if(!activos.length){
     document.getElementById('tabla-body').innerHTML='<tr><td colspan="11" class="loading">No se encontraron activos</td></tr>';
+    document.getElementById('pag-bar').style.display='none';
     return;
   }
-  document.getElementById('tabla-body').innerHTML=activos.map(a=>`
+
+  const total = activos.length;
+  const porPagina = tamañoPagina === 0 ? total : tamañoPagina;
+  const totalPags = Math.ceil(total / porPagina);
+  if(paginaActual > totalPags) paginaActual = 1;
+
+  const inicio = (paginaActual - 1) * porPagina;
+  const fin = Math.min(inicio + porPagina, total);
+  const paginados = activos.slice(inicio, fin);
+
+  document.getElementById('tabla-body').innerHTML = paginados.map(a=>`
         <tr id="fila-${a.id}">
       <td id="cb-col-${a.id}" style="display:none;text-align:center;vertical-align:middle"><input type="checkbox" class="cb-activo activo-cb" value="${a.id}" onchange="onCheckChange(this)"></td>
       <td style="font-weight:700;color:#1F3864">${a.id}</td>
@@ -559,6 +596,44 @@ function renderTabla(){
       <td style="font-size:12px">$${(a.precio||0).toLocaleString('es-CL')}</td>
       <td><button class="btn-sm" onclick="modoSeleccion?null:abrirPanel('${a.id}')">Ver ficha</button></td>
     </tr>`).join('');
+
+  // Actualizar barra de paginación
+  const pagBar = document.getElementById('pag-bar');
+  pagBar.style.display = 'flex';
+  document.getElementById('pag-info').textContent =
+    `Mostrando ${inicio+1}–${fin} de ${total} activos`;
+
+  // Botones de página
+  let btns = '';
+  btns += `<button class="pag-btn" onclick="irPagina(${paginaActual-1})" ${paginaActual===1?'disabled':''}>‹</button>`;
+
+  // Mostrar máximo 5 páginas alrededor de la actual
+  let pStart = Math.max(1, paginaActual-2);
+  let pEnd = Math.min(totalPags, paginaActual+2);
+  if(pStart > 1) btns += `<button class="pag-btn" onclick="irPagina(1)">1</button>${pStart>2?'<span style="font-size:12px;color:#aaa;padding:0 4px">…</span>':''}`;
+  for(let p=pStart; p<=pEnd; p++){
+    btns += `<button class="pag-btn${p===paginaActual?' active':''}" onclick="irPagina(${p})">${p}</button>`;
+  }
+  if(pEnd < totalPags) btns += `${pEnd<totalPags-1?'<span style="font-size:12px;color:#aaa;padding:0 4px">…</span>':''}<button class="pag-btn" onclick="irPagina(${totalPags})">${totalPags}</button>`;
+  btns += `<button class="pag-btn" onclick="irPagina(${paginaActual+1})" ${paginaActual===totalPags?'disabled':''}>›</button>`;
+
+  document.getElementById('pag-btns').innerHTML = btns;
+}
+
+function irPagina(p){
+  const total = activos.length;
+  const porPagina = tamañoPagina === 0 ? total : tamañoPagina;
+  const totalPags = Math.ceil(total / porPagina);
+  if(p < 1 || p > totalPags) return;
+  paginaActual = p;
+  renderTabla();
+  window.scrollTo({top:0, behavior:'smooth'});
+}
+
+function cambiarTamano(){
+  tamañoPagina = parseInt(document.getElementById('pag-size').value);
+  paginaActual = 1;
+  renderTabla();
 }
 
 async function abrirPanel(id){
