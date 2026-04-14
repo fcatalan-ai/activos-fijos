@@ -653,15 +653,16 @@ function verDocumento(url, titulo){
 }
 
 function renderDocumentos(){
+  if(!activoActual) return;
   const factura = activoActual.url_factura || '';
   const oc = activoActual.url_oc || '';
 
   // Preview factura
-  const urlFactura = urlVisualizableDoc(factura);
-  const urlOC = urlVisualizableDoc(oc);
+  const elFact = document.getElementById('factura-preview');
+  const elOC = document.getElementById('oc-preview');
+  const elLinks = document.getElementById('p-docs-links');
 
-  // Miniatura factura
-  document.getElementById('factura-preview').innerHTML = factura
+  if(elFact) elFact.innerHTML = factura
     ? `<div>
         <img src="${factura}" onclick="verDocumento('${factura}','Factura')"
           style="width:100%;border-radius:8px;border:1px solid #e5e8ed;cursor:pointer;object-fit:cover;max-height:140px"
@@ -674,7 +675,7 @@ function renderDocumentos(){
     : '<span style="font-size:11px;color:#aaa">Sin factura registrada</span>';
 
   // Miniatura OC
-  document.getElementById('oc-preview').innerHTML = oc
+  if(elOC) elOC.innerHTML = oc
     ? `<div>
         <img src="${oc}" onclick="verDocumento('${oc}','Orden de Compra')"
           style="width:100%;border-radius:8px;border:1px solid #e5e8ed;cursor:pointer;object-fit:cover;max-height:140px"
@@ -690,7 +691,7 @@ function renderDocumentos(){
   let links = '';
   if(factura) links += `<button onclick="verDocumento('${factura}','Factura')" style="font-size:11px;background:#E6F1FB;color:#0C447C;padding:4px 10px;border-radius:6px;border:none;cursor:pointer;font-weight:600">📄 Factura</button> `;
   if(oc) links += `<button onclick="verDocumento('${oc}','Orden de Compra')" style="font-size:11px;background:#E2EFDA;color:#27500A;padding:4px 10px;border-radius:6px;border:none;cursor:pointer;font-weight:600">📋 OC</button>`;
-  document.getElementById('p-docs-links').innerHTML = links;
+  if(elLinks) elLinks.innerHTML = links;
 }
 
 function cerrarPanel(){
