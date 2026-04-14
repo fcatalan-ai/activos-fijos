@@ -162,8 +162,32 @@ tr.seleccionado td{background:#EEF4FF !important}
 <!-- BARRA SELECCION MULTIPLE -->
 <div class="bulk-bar" id="bulk-bar">
   <span class="bulk-bar-info" id="bulk-info">0 seleccionados</span>
-  <button class="bulk-btn-del" onclick="eliminarSeleccionados()">🗑️ Eliminar seleccionados</button>
+  <button class="bulk-btn-del" style="background:#1F6B2E" onclick="abrirModalBulkDoc('factura')">📄 Subir factura</button>
+  <button class="bulk-btn-del" style="background:#0C447C" onclick="abrirModalBulkDoc('oc')">📋 Subir OC</button>
+  <button class="bulk-btn-del" onclick="eliminarSeleccionados()">🗑️ Eliminar</button>
   <button class="bulk-btn-cancel" onclick="limpiarSeleccion()">✕ Cancelar</button>
+</div>
+
+<!-- MODAL SUBIR DOC MASIVO -->
+<div class="modal-bg" id="modal-bulk-doc">
+  <div class="modal" style="max-width:420px">
+    <h3 id="bulk-doc-title" style="color:#1F3864">📄 Subir factura a seleccionados</h3>
+    <p style="font-size:13px;color:#666;margin-bottom:14px" id="bulk-doc-info">—</p>
+    <div style="background:#E6F1FB;border:1px solid #B5D4F4;border-radius:8px;padding:12px;margin-bottom:14px;font-size:12px;color:#0C447C">
+      ℹ️ La misma imagen se asignará a todos los activos seleccionados
+    </div>
+    <div class="foto-upload-area" onclick="document.getElementById('bulk-doc-input').click()">
+      <input type="file" id="bulk-doc-input" accept="image/*" onchange="previewBulkDoc()">
+      <div class="foto-upload-label" id="bulk-doc-label">📷 <span>Haz click para seleccionar imagen</span><br>
+      <small style="color:#999">JPG, PNG, WEBP — máx 10MB</small></div>
+    </div>
+    <div id="bulk-doc-preview" style="margin-top:10px;text-align:center"></div>
+    <div id="bulk-doc-status" style="font-size:12px;margin-top:10px;text-align:center"></div>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="cerrarModal('modal-bulk-doc')">Cancelar</button>
+      <button class="btn-save" id="btn-bulk-doc-save" onclick="subirDocMasivo()" disabled>Subir a todos</button>
+    </div>
+  </div>
 </div>
 
 <div class="panel" id="panel">
@@ -1156,6 +1180,72 @@ function actualizarBarraSeleccion(){
   } else {
     bar.classList.remove('show');
   }
+}
+
+let bulkDocTipo = 'factura';
+let bulkDocFile = null;
+
+function abrirModalBulkDoc(tipo){
+  if(seleccionados.size === 0) return;
+  bulkDocTipo = tipo;
+  bulkDocFile = null;
+  document.getElementById('bulk-doc-input').value = '';
+  document.getElementById('bulk-doc-preview').innerHTML = '';
+  document.getElementById('bulk-doc-status').innerHTML = '';
+  document.getElementById('btn-bulk-doc-save').disabled = true;
+  document.getElementById('bulk-doc-label').innerHTML = '📷 <span>Haz click para seleccionar imagen</span><br><small style="color:#999">JPG, PNG, WEBP — máx 10MB</small>';
+  const titulo = tipo === 'factura' ? '📄 Subir factura a seleccionados' : '📋 Subir OC a seleccionados';
+  document.getElementById('bulk-doc-title').textContent = titulo;
+  document.getElementById('bulk-doc-info').textContent = `Se subirá a ${seleccionados.size} activo${seleccionados.size>1?'s':''} seleccionado${seleccionados.size>1?'s':''}`;
+  document.getElementById('modal-bulk-doc').classList.add('show');
+}
+
+function previewBulkDoc(){
+  const file = document.getElementById('bulk-doc-input').files[0];
+  if(!file) return;
+  bulkDocFile = file;
+  document.getElementById('bulk-doc-label').innerHTML = `✅ <span>${file.name}</span><br><small style="color:#27500A">${(file.size/1024).toFixed(0)} KB</small>`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('bulk-doc-preview').innerHTML = `<img src="${e.target.result}" style="max-height:120px;border-radius:8px;border:1px solid #ddd">`;
+  };
+  reader.readAsDataURL(file);
+  document.getElementById('btn-bulk-doc-save').disabled = false;
+}
+
+async function subirDocMasivo(){
+  if(!bulkDocFile || seleccionados.size === 0) return;
+  const btn = document.getElementById('btn-bulk-doc-save');
+  const status = document.getElementById('bulk-doc-status');
+  btn.disabled = true;
+  btn.textContent = 'Subiendo...';
+
+  const ids = [...seleccionados];
+  let ok = 0, errores = 0;
+
+  for(const id of ids){
+    try{
+      status.innerHTML = `⏳ Subiendo a ${id}... (${ok+errores+1}/${ids.length})`;
+      const fd = new FormData();
+      fd.append('archivo', bulkDocFile);
+      const r = await fetch(`/api/activos/${id}/documento?tipo=${bulkDocTipo}`, {method:'POST', body:fd});
+      const d = await r.json();
+      if(d.ok) ok++;
+      else errores++;
+    } catch(e){ errores++; }
+  }
+
+  if(errores === 0){
+    status.innerHTML = `<span style="color:#27500A">✅ ${ok} activo${ok>1?'s':''} actualizados correctamente</span>`;
+  } else {
+    status.innerHTML = `<span style="color:#27500A">✅ ${ok} OK</span> · <span style="color:#c00">❌ ${errores} con error</span>`;
+  }
+  btn.textContent = 'Subir a todos';
+  setTimeout(()=>{
+    cerrarModal('modal-bulk-doc');
+    limpiarSeleccion();
+    filtrar();
+  }, 2000);
 }
 
 async function eliminarSeleccionados(){
