@@ -12,26 +12,29 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 .topbar .sub{color:#9BB8D8;font-size:12px;margin-top:2px}
 .badge-estado{padding:4px 12px;border-radius:20px;font-size:12px;font-weight:700;display:inline-block;margin-top:4px}
 .badge-bueno{background:#E2EFDA;color:#27500A}
+.badge-enreparación{background:#FFF0D9;color:#8B4500}
 .badge-regular{background:#FFF2CC;color:#806000}
 .badge-malo{background:#FCEBEB;color:#791F1F}
-.badge-baja{background:#E8E8E8;color:#555;text-decoration:line-through}
+.badge-debaja{background:#E8E8E8;color:#555;text-decoration:line-through}
 .main{padding:14px;max-width:500px;margin:0 auto}
-/* TABS */
 .tabs{display:flex;gap:0;margin-bottom:14px;border-radius:10px;overflow:hidden;border:1px solid #e5e8ed;background:#fff}
 .tab{flex:1;padding:10px 4px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:#fff;color:#888;text-align:center;transition:all 0.15s}
 .tab.active{background:#1F3864;color:#fff}
 .tab:not(:last-child){border-right:1px solid #e5e8ed}
-/* FICHA */
 .card{background:#fff;border-radius:10px;border:1px solid #e5e8ed;padding:14px;margin-bottom:12px}
 .card-title{font-size:11px;font-weight:700;color:#1F3864;text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px;border-left:3px solid #1F3864;padding-left:8px}
 .field-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .field-box label{font-size:10px;color:#999;text-transform:uppercase;display:block;margin-bottom:2px}
 .field-box .val{font-size:13px;font-weight:600;color:#1a1a1a}
 .field-full{grid-column:span 2}
-/* FOTO */
+.foto-ficha{width:100%;border-radius:8px;display:block;object-fit:cover;max-height:200px;margin-bottom:12px;border:1px solid #e5e8ed}
 .foto-wrap{width:100%;border-radius:8px;overflow:hidden;background:#f8f8f8;text-align:center;padding:20px;color:#999;font-size:13px}
 .foto-wrap img{width:100%;border-radius:8px;display:block}
-/* HISTORIAL */
+.doc-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.doc-item{border:1px solid #e5e8ed;border-radius:8px;overflow:hidden;background:#fff}
+.doc-label{font-size:11px;font-weight:700;color:#1F3864;padding:6px 10px;border-bottom:1px solid #f0f0f0;background:#f8fafc}
+.doc-img{width:100%;display:block;object-fit:cover;height:120px;cursor:pointer}
+.doc-empty{padding:20px;text-align:center;color:#bbb;font-size:12px}
 .mov-item{padding:10px 0;border-bottom:1px solid #f0f0f0}
 .mov-item:last-child{border-bottom:none}
 .mov-tipo{font-weight:700;font-size:12px;color:#1F3864}
@@ -40,7 +43,6 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 .mov-fecha{font-size:11px;color:#aaa;margin-top:2px}
 .traslado-box{background:#f0f4f8;border-radius:6px;padding:8px;margin-top:6px;font-size:11px}
 .traslado-box div{margin-bottom:3px;color:#444}
-/* TRASLADO FORM */
 .form-group label{font-size:12px;color:#666;display:block;margin-bottom:4px;margin-top:10px}
 .form-group select,.form-group input{width:100%;padding:9px 10px;border:1px solid #ddd;border-radius:8px;font-size:14px;background:#fff}
 .btn-traslado{width:100%;padding:13px;background:#1F3864;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:700;cursor:pointer;margin-top:14px;touch-action:manipulation}
@@ -51,6 +53,10 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 .loading{text-align:center;padding:20px;color:#999;font-size:13px}
 .dep-bar-bg{background:#eee;border-radius:10px;height:8px;margin-top:6px;overflow:hidden}
 .dep-bar{height:100%;border-radius:10px;background:#1F3864}
+.lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:999;align-items:center;justify-content:center;flex-direction:column;padding:20px}
+.lightbox.show{display:flex}
+.lightbox img{max-width:100%;max-height:80vh;border-radius:8px}
+.lightbox-close{color:#fff;font-size:14px;margin-top:14px;background:rgba(255,255,255,0.2);border:none;padding:8px 20px;border-radius:8px;cursor:pointer}
 </style>
 </head>
 <body>
@@ -66,16 +72,18 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 </div>
 
 <div class="main">
-  <!-- TABS -->
   <div class="tabs">
     <button class="tab active" onclick="showTab('ficha',this)">📋 Ficha</button>
-    <button class="tab" onclick="showTab('foto',this)">📷 Foto</button>
+    <button class="tab" onclick="showTab('documentos',this)">📎 Documentos</button>
     <button class="tab" onclick="showTab('historial',this)">📜 Historial</button>
     <button class="tab" onclick="showTab('traslado',this)">🚚 Traslado</button>
   </div>
 
   <!-- TAB FICHA -->
   <div id="tab-ficha">
+    {% if a.foto %}
+    <img src="{{ a.foto }}" class="foto-ficha" alt="Foto {{ a.id }}" onclick="abrirLightbox('{{ a.foto }}')">
+    {% endif %}
     <div class="card">
       <div class="card-title">Información del activo</div>
       <div class="field-grid">
@@ -90,13 +98,15 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
         <div class="field-box"><label>Sala</label><div class="val">{{ a.sala or '—' }}</div></div>
         <div class="field-box field-full"><label>Responsable</label><div class="val">{{ a.responsable or '—' }}</div></div>
         {% if a.centro_costo %}
-        <div class="field-box field-full"><label>Centro de Costo</label><div class="val">{{ a.centro_costo }}</div></div>
+        <div class="field-box field-full"><label>Centro de Costo</label><div class="val" style="color:#1F3864">{{ a.centro_costo }}</div></div>
+        {% endif %}
+        {% if a.proveedor %}
+        <div class="field-box field-full"><label>Proveedor</label><div class="val">{{ a.proveedor }}</div></div>
         {% endif %}
         <div class="field-box"><label>Fecha Compra</label><div class="val">{{ a.fecha_compra or '—' }}</div></div>
         <div class="field-box"><label>Precio</label><div class="val">${{ "{:,.0f}".format(a.precio or 0).replace(',','.') }}</div></div>
       </div>
     </div>
-
     {% if dep %}
     <div class="card">
       <div class="card-title">Depreciación</div>
@@ -111,15 +121,28 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
     {% endif %}
   </div>
 
-  <!-- TAB FOTO -->
-  <div id="tab-foto" style="display:none">
+  <!-- TAB DOCUMENTOS (antes Foto) -->
+  <div id="tab-documentos" style="display:none">
     <div class="card">
-      <div class="card-title">Foto del activo</div>
-      {% if a.foto %}
-      <div class="foto-wrap"><img src="{{ a.foto }}" alt="Foto {{ a.id }}"></div>
-      {% else %}
-      <div class="foto-wrap">📷<br>Sin foto registrada</div>
-      {% endif %}
+      <div class="card-title">Documentos del activo</div>
+      <div class="doc-grid">
+        <div class="doc-item">
+          <div class="doc-label">📄 Factura</div>
+          {% if a.url_factura %}
+          <img src="{{ a.url_factura }}" class="doc-img" alt="Factura" onclick="abrirLightbox('{{ a.url_factura }}')">
+          {% else %}
+          <div class="doc-empty">Sin factura</div>
+          {% endif %}
+        </div>
+        <div class="doc-item">
+          <div class="doc-label">📋 Orden de Compra</div>
+          {% if a.url_oc %}
+          <img src="{{ a.url_oc }}" class="doc-img" alt="OC" onclick="abrirLightbox('{{ a.url_oc }}')">
+          {% else %}
+          <div class="doc-empty">Sin OC</div>
+          {% endif %}
+        </div>
+      </div>
     </div>
   </div>
 
@@ -167,16 +190,31 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
   </div>
 </div>
 
+<!-- LIGHTBOX -->
+<div class="lightbox" id="lightbox" onclick="cerrarLightbox()">
+  <img id="lightbox-img" src="" alt="">
+  <button class="lightbox-close" onclick="cerrarLightbox()">✕ Cerrar</button>
+</div>
+
 <script>
 const ACTIVO_ID = "{{ a.id }}";
 
 function showTab(tab, btn){
-  ['ficha','foto','historial','traslado'].forEach(t=>{
+  ['ficha','documentos','historial','traslado'].forEach(t=>{
     document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
   });
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
   if(tab==='historial') cargarHistorial();
+}
+
+function abrirLightbox(url){
+  document.getElementById('lightbox-img').src = url;
+  document.getElementById('lightbox').classList.add('show');
+}
+
+function cerrarLightbox(){
+  document.getElementById('lightbox').classList.remove('show');
 }
 
 async function cargarHistorial(){
