@@ -517,16 +517,19 @@ def subir_documento(id):
     data = file.read()
     if len(data) > 10*1024*1024: return jsonify({'error':'Archivo muy grande (máx 10MB)'}), 400
     try:
+        es_pdf = file.filename.lower().endswith('.pdf')
         resultado = cloudinary.uploader.upload(
             data,
             folder='activos-fijos/documentos',
             public_id=f'activo_{id}_{tipo_doc}',
             overwrite=True,
-            resource_type='auto',
-            access_mode='public',
-            flags='attachment:false'
+            resource_type='raw' if es_pdf else 'image',
+            access_mode='public'
         )
         url_doc = resultado['secure_url']
+        # Para PDFs raw, corregir la URL de /image/ a /raw/
+        if es_pdf and '/image/upload/' in url_doc:
+            url_doc = url_doc.replace('/image/upload/', '/raw/upload/')
         campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
         try:
             db_execute(f"UPDATE activos SET {campo}=? WHERE id=?", (url_doc, id))
