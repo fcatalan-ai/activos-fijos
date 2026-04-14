@@ -638,9 +638,10 @@ async function subirDocumento(tipo){
 
 function urlVisualizableDoc(url){
   if(!url) return '';
-  // Para PDFs en Cloudinary raw, usar Google Docs viewer para abrir en navegador
   if(url.toLowerCase().includes('.pdf')){
-    return 'https://docs.google.com/viewer?url=' + encodeURIComponent(url) + '&embedded=false';
+    // Insertar fl_inline en la URL de Cloudinary para forzar visualización en navegador
+    // Ejemplo: .../upload/v123/... → .../upload/fl_inline/v123/...
+    return url.replace('/upload/', '/upload/fl_inline/');
   }
   return url;
 }
