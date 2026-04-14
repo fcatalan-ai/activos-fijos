@@ -152,7 +152,7 @@ with app.app_context():
         conn_m, mode_m = get_db()
         cur_m = conn_m.cursor()
         # Agregar columnas nuevas si no existen
-        for col in ['centro_costo','url_factura','url_oc']:
+        for col in ['centro_costo','url_factura','url_oc','proveedor']:
             try:
                 if mode_m == 'pg':
                     cur_m.execute(f"ALTER TABLE activos ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT ''")
@@ -398,7 +398,7 @@ def editar_activo(id):
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','proveedor']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
