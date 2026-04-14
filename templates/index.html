@@ -1161,8 +1161,10 @@ async function previewExcel(){
 
     if(!datos.length){ prev.innerHTML='<span style="color:#888">Sin datos de ejemplo en la vista previa</span>'; return; }
 
+    // Contar filas reales con datos (no contar filas vacías con formato)
+    const filasReales = filas.slice(3).filter(f => f.some(v=>v && v.trim && v.trim()!=='' || (v && typeof v==='string' && v!=='None'))).length;
     let tabla = `<div style="margin-bottom:8px;font-size:12px;color:#27500A;font-weight:600">
-      ✅ Hoja: <strong>${d.hoja_usada}</strong> · ${d.max_row-3} activos detectados para importar
+      ✅ Hoja: <strong>${d.hoja_usada}</strong> · ~${filasReales} activos en vista previa (se importarán solo las filas con datos)
     </div>`;
     tabla += `<div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">`;
     tabla += `<tr>${headers.slice(0,10).map(h=>`<th style="background:#1F3864;color:#fff;padding:5px 8px;text-align:left;white-space:nowrap">${h||''}</th>`).join('')}</tr>`;
