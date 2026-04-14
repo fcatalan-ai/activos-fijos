@@ -1134,15 +1134,48 @@ function abrirModalImportar(){
   document.getElementById('modal-importar').classList.add('show');
 }
 
-function previewExcel(){
+async function previewExcel(){
   const file = document.getElementById('excel-input').files[0];
   if(!file) return;
   archivoExcel = file;
-  document.getElementById('excel-label').innerHTML=`✅ <span>${file.name}</span><br><small style="color:#27500A">${(file.size/1024).toFixed(0)} KB — listo para importar</small>`;
-  document.getElementById('import-preview').style.display='block';
-  document.getElementById('import-preview').innerHTML=`<strong>Archivo seleccionado:</strong> ${file.name}<br>Haz click en "Importar activos" para procesar.`;
+  document.getElementById('excel-label').innerHTML=`✅ <span>${file.name}</span><br><small style="color:#27500A">${(file.size/1024).toFixed(0)} KB</small>`;
   document.getElementById('btn-importar').disabled=false;
   document.getElementById('btn-debug').disabled=false;
+
+  // Vista previa automática
+  const prev = document.getElementById('import-preview');
+  prev.style.display='block';
+  prev.innerHTML='<div style="color:#666;font-size:12px">⏳ Cargando vista previa...</div>';
+
+  try {
+    const fd = new FormData();
+    fd.append('archivo', file);
+    const r = await fetch('/api/debug-excel', {method:'POST', body:fd});
+    const d = await r.json();
+    if(d.error){ prev.innerHTML=`<span style="color:#c00">❌ ${d.error}</span>`; return; }
+
+    const filas = d.preview_filas_1_6 || [];
+    // La fila 3 son los headers, fila 4+ son datos
+    const headers = filas[2] || [];
+    const datos = filas.slice(3).filter(f => f.some(v=>v));
+
+    if(!datos.length){ prev.innerHTML='<span style="color:#888">Sin datos de ejemplo en la vista previa</span>'; return; }
+
+    let tabla = `<div style="margin-bottom:8px;font-size:12px;color:#27500A;font-weight:600">
+      ✅ Hoja: <strong>${d.hoja_usada}</strong> · ${d.max_row-3} activos detectados para importar
+    </div>`;
+    tabla += `<div style="overflow-x:auto"><table style="width:100%;font-size:11px;border-collapse:collapse">`;
+    tabla += `<tr>${headers.slice(0,10).map(h=>`<th style="background:#1F3864;color:#fff;padding:5px 8px;text-align:left;white-space:nowrap">${h||''}</th>`).join('')}</tr>`;
+    datos.slice(0,3).forEach((fila,i)=>{
+      const bg = i%2===0?'#f8fafc':'#fff';
+      tabla += `<tr>${fila.slice(0,10).map(v=>`<td style="padding:4px 8px;border-bottom:1px solid #eee;background:${bg};white-space:nowrap;max-width:120px;overflow:hidden;text-overflow:ellipsis">${v||'—'}</td>`).join('')}</tr>`;
+    });
+    tabla += '</table></div>';
+    if(headers.length > 10) tabla += `<div style="font-size:11px;color:#888;margin-top:4px">... y ${headers.length-10} columnas más</div>`;
+    prev.innerHTML = tabla;
+  } catch(e){
+    prev.innerHTML=`<span style="color:#888;font-size:12px">Vista previa no disponible</span>`;
+  }
 }
 
 async function debugExcel(){
@@ -1269,6 +1302,10 @@ async function eliminarMant(mid){
 
 function confirmarEliminar(){
   if(!activoActual) return;
+  pedirPin('🗑️ Eliminar activo', `Confirma el PIN para eliminar ${activoActual.id}`, _confirmarEliminar);
+}
+
+function _confirmarEliminar(){
   const a=activoActual;
   document.getElementById('del-id').textContent=a.id;
   document.getElementById('del-desc').textContent=`${a.subtipo||''} ${a.marca||''} ${a.modelo||''} — ${a.sala||''}`;
