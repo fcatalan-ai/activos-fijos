@@ -1264,7 +1264,7 @@ def export_informe_anual():
 
     ws0.merge_cells("B4:B4")
     c = ws0["B4"]
-    c.value = f"Año {anio} — Colegio"
+    c.value = f"Año {anio} — Colegio Centenario de Temuco"
     c.font = Font(name="Arial", size=14, color=BLANCO, italic=True)
     c.fill = fill(AZUL_MED)
     c.alignment = center()
