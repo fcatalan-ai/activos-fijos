@@ -513,16 +513,16 @@ def subir_documento(id):
     if 'archivo' not in request.files: return jsonify({'error':'No se envió archivo'}), 400
     file = request.files['archivo']
     ext = file.filename.rsplit('.',1)[-1].lower()
-    if ext not in {'pdf','jpg','jpeg','png'}: return jsonify({'error':'Solo PDF o imagen'}), 400
+    if ext not in {'jpg','jpeg','png','gif','webp'}: return jsonify({'error':'Solo imágenes JPG, PNG, WEBP'}), 400
     data = file.read()
-    if len(data) > 10*1024*1024: return jsonify({'error':'Archivo muy grande (máx 10MB)'}), 400
+    if len(data) > 10*1024*1024: return jsonify({'error':'Imagen muy grande (máx 10MB)'}), 400
     try:
         resultado = cloudinary.uploader.upload(
             data,
             folder='activos-fijos/documentos',
             public_id=f'activo_{id}_{tipo_doc}',
             overwrite=True,
-            resource_type='raw',
+            resource_type='image',
             access_mode='public'
         )
         url_doc = resultado['secure_url']
