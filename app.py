@@ -290,8 +290,8 @@ def get_activos():
     sql = "SELECT * FROM activos WHERE 1=1"
     params = []
     if q:
-        sql += " AND (id LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR responsable LIKE ?)"
-        p = f'%{q}%'; params += [p,p,p,p,p]
+        sql += " AND (id LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR responsable LIKE ? OR subtipo LIKE ? OR proveedor LIKE ?)"
+        p = f'%{q}%'; params += [p,p,p,p,p,p,p]
     if tipo:     sql += " AND tipo=?";          params.append(tipo)
     if estado:   sql += " AND estado=?";        params.append(estado)
     if edificio: sql += " AND edificio=?";      params.append(edificio)
