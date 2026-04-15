@@ -290,8 +290,12 @@ def get_activos():
     sql = "SELECT * FROM activos WHERE 1=1"
     params = []
     if q:
-        sql += " AND (id LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR responsable LIKE ? OR subtipo LIKE ? OR proveedor LIKE ?)"
-        p = f'%{q}%'; params += [p,p,p,p,p,p,p]
+        p = f'%{q}%'
+        if 'DATABASE_URL' in os.environ and os.environ['DATABASE_URL']:
+            sql += " AND (id ILIKE ? OR marca ILIKE ? OR modelo ILIKE ? OR serie ILIKE ? OR responsable ILIKE ? OR subtipo ILIKE ? OR proveedor ILIKE ?)"
+        else:
+            sql += " AND (LOWER(id) LIKE LOWER(?) OR LOWER(marca) LIKE LOWER(?) OR LOWER(modelo) LIKE LOWER(?) OR LOWER(serie) LIKE LOWER(?) OR LOWER(responsable) LIKE LOWER(?) OR LOWER(subtipo) LIKE LOWER(?) OR LOWER(proveedor) LIKE LOWER(?))"
+        params += [p,p,p,p,p,p,p]
     if tipo:     sql += " AND tipo=?";          params.append(tipo)
     if estado:   sql += " AND estado=?";        params.append(estado)
     if edificio: sql += " AND edificio=?";      params.append(edificio)
