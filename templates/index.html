@@ -604,6 +604,14 @@ function ordenarPor(col){
   activos.sort((a,b) => {
     let va = a[col] ?? '';
     let vb = b[col] ?? '';
+    // ID: ordenar solo por el correlativo final (ej: AF-26-1012 → 1012)
+    if(col === 'id'){
+      const partsA = String(va).split('-');
+      const partsB = String(vb).split('-');
+      const na = parseInt(partsA[partsA.length-1]) || 0;
+      const nb = parseInt(partsB[partsB.length-1]) || 0;
+      return sortDir==='asc' ? na-nb : nb-na;
+    }
     if(col === 'precio'){
       va = parseFloat(va) || 0;
       vb = parseFloat(vb) || 0;
