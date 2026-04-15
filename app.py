@@ -1612,6 +1612,27 @@ def export_informe_anual():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+@app.route('/admin/normalizar-texto')
+@admin_required
+def normalizar_texto():
+    resultados = []
+    try:
+        conn, mode = get_db()
+        cur = conn.cursor()
+        if mode == 'pg':
+            cur.execute("UPDATE activos SET marca=INITCAP(marca) WHERE marca IS NOT NULL AND marca != ''")
+            cur.execute("UPDATE activos SET modelo=INITCAP(modelo) WHERE modelo IS NOT NULL AND modelo != ''")
+            cur.execute("UPDATE activos SET subtipo=INITCAP(subtipo) WHERE subtipo IS NOT NULL AND subtipo != ''")
+            cur.execute("UPDATE activos SET sala=INITCAP(sala) WHERE sala IS NOT NULL AND sala != ''")
+            conn.commit()
+            resultados.append('✅ Marca, Modelo, Subtipo y Sala normalizados correctamente (PostgreSQL)')
+        else:
+            resultados.append('ℹ️ SQLite no soporta INITCAP — solo aplica en producción')
+        conn.close()
+    except Exception as e:
+        resultados.append(f'❌ Error: {e}')
+    return '<br>'.join(resultados) + '<br><br><a href="/">Volver al inicio</a>'
+
 @app.route('/api/verificar-pin', methods=['POST'])
 @login_required
 def verificar_pin():
