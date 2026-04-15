@@ -85,6 +85,12 @@ tr:hover td{background:#f8fafc}
 .foto-upload-label{font-size:13px;color:#666;cursor:pointer}
 .foto-upload-label span{color:#2E74B5;font-weight:600}
 .foto-thumb{width:40px;height:40px;object-fit:cover;border-radius:4px;border:1px solid #ddd;vertical-align:middle}
+/* ORDENAMIENTO COLUMNAS */
+th.sortable{cursor:pointer;user-select:none;white-space:nowrap}
+th.sortable:hover{background:#2E74B5}
+th.sortable::after{content:' ⇅';opacity:0.4;font-size:10px}
+th.sort-asc::after{content:' ↑';opacity:1}
+th.sort-desc::after{content:' ↓';opacity:1}
 /* PAGINACION */
 .pag-bar{display:flex;align-items:center;gap:8px;justify-content:space-between;padding:10px 14px;background:#fff;border-top:1px solid #f0f0f0;border-radius:0 0 10px 10px;flex-wrap:wrap}
 .pag-info{font-size:12px;color:#888}
@@ -163,8 +169,17 @@ tr.seleccionado td{background:#EEF4FF !important}
     <table>
       <thead>
         <tr>
-          <th id="th-cb" style="display:none;width:36px"><input type="checkbox" id="cb-todos" onchange="seleccionarTodos(this)" class="cb-activo"></th><th>ID Activo</th><th>Subtipo</th><th>Marca / Modelo</th>
-          <th>N° Serie</th><th>Estado</th><th>Edificio / Sala</th><th>Responsable</th><th>Centro de Costo</th><th>Precio</th><th></th>
+          <th id="th-cb" style="display:none;width:36px"><input type="checkbox" id="cb-todos" onchange="seleccionarTodos(this)" class="cb-activo"></th>
+          <th class="sortable" onclick="ordenarPor('id')">ID Activo</th>
+          <th class="sortable" onclick="ordenarPor('subtipo')">Subtipo</th>
+          <th class="sortable" onclick="ordenarPor('marca')">Marca / Modelo</th>
+          <th class="sortable" onclick="ordenarPor('serie')">N° Serie</th>
+          <th class="sortable" onclick="ordenarPor('estado')">Estado</th>
+          <th class="sortable" onclick="ordenarPor('edificio')">Edificio / Sala</th>
+          <th class="sortable" onclick="ordenarPor('responsable')">Responsable</th>
+          <th class="sortable" onclick="ordenarPor('centro_costo')">Centro de Costo</th>
+          <th class="sortable" onclick="ordenarPor('precio')">Precio</th>
+          <th></th>
         </tr>
       </thead>
       <tbody id="tabla-body"><tr><td colspan="11" class="loading">Cargando activos...</td></tr></tbody>
@@ -565,6 +580,44 @@ const eB={Bueno:'badge-bueno','En Reparación':'badge-reparacion','De Baja':'bad
 
 let paginaActual = 1;
 let tamañoPagina = 25;
+let sortCol = 'id';
+let sortDir = 'desc';
+
+function ordenarPor(col){
+  if(sortCol === col){
+    sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    sortCol = col;
+    sortDir = 'asc';
+  }
+  // Actualizar estilos de cabeceras
+  document.querySelectorAll('th.sortable').forEach(th => {
+    th.classList.remove('sort-asc','sort-desc');
+  });
+  const ths = document.querySelectorAll('th.sortable');
+  const cols = ['id','subtipo','marca','serie','estado','edificio','responsable','centro_costo','precio'];
+  const idx = cols.indexOf(col);
+  if(idx >= 0 && ths[idx]){
+    ths[idx].classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
+  }
+  // Ordenar array
+  activos.sort((a,b) => {
+    let va = a[col] ?? '';
+    let vb = b[col] ?? '';
+    if(col === 'precio'){
+      va = parseFloat(va) || 0;
+      vb = parseFloat(vb) || 0;
+      return sortDir==='asc' ? va-vb : vb-va;
+    }
+    va = String(va).toLowerCase();
+    vb = String(vb).toLowerCase();
+    if(va < vb) return sortDir==='asc' ? -1 : 1;
+    if(va > vb) return sortDir==='asc' ? 1 : -1;
+    return 0;
+  });
+  paginaActual = 1;
+  renderTabla();
+}
 
 function renderTabla(){
   if(!activos.length){
