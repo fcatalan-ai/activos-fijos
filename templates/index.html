@@ -931,6 +931,8 @@ function drawBarcode(text){
 }
 
 function abrirModalNuevo(){
+  const btn = document.querySelector('#modal-activo .btn-save');
+  if(btn){ btn.disabled=false; btn.textContent='Guardar activo'; }
   document.getElementById('modal-title').textContent='Nuevo Activo';
   document.getElementById('m-id').value='';
   document.getElementById('m-id-display').value='Se asignará automáticamente';
@@ -1026,6 +1028,8 @@ function abrirModalEditar(){
 }
 
 function _abrirModalEditar(){
+  const btn = document.querySelector('#modal-activo .btn-save');
+  if(btn){ btn.disabled=false; btn.textContent='Guardar activo'; }
   const a=activoActual;
   document.getElementById('modal-title').textContent='Editar Activo — '+a.id;
   document.getElementById('m-id').value=a.id;
