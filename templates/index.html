@@ -138,7 +138,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     <div class="stat"><div class="stat-n">—</div><div class="stat-l">Cargando...</div></div>
   </div>
   <div class="toolbar">
-    <input type="text" id="buscar" placeholder="Buscar por ID, subtipo, marca, modelo, N° serie, responsable, proveedor..." oninput="filtrar()">
+    <input type="text" id="buscar" placeholder="Buscar por ID, subtipo, marca, modelo, serie, responsable, sala, edificio..." oninput="filtrar()">
     <select id="f-tipo" onchange="filtrar()">
       <option value="">Todos los tipos</option>
       {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
