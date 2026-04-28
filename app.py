@@ -160,6 +160,13 @@ with app.app_context():
                 else:
                     cur_m.execute(f"ALTER TABLE activos ADD COLUMN {col} TEXT DEFAULT ''")
             except: pass
+        # cantidad con DEFAULT 1
+        try:
+            if mode_m == 'pg':
+                cur_m.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1")
+            else:
+                cur_m.execute("ALTER TABLE activos ADD COLUMN cantidad INTEGER DEFAULT 1")
+        except: pass
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -376,15 +383,16 @@ def crear_activo():
         aid = next_id(data.get('fecha_compra',''))
         vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
         centro_costo = data.get('centro_costo','')
+        cantidad = int(data.get('cantidad') or 1)
         db_execute('''INSERT INTO activos
             (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-             fecha_compra,precio,documento,vida_util,observaciones,foto)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+             fecha_compra,precio,documento,vida_util,observaciones,foto,cantidad)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
              data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
              data.get('edificio'), data.get('sala'), data.get('responsable'),
              data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-             vida, data.get('observaciones',''), data.get('foto','')))
+             vida, data.get('observaciones',''), data.get('foto',''), cantidad))
         try:
             db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (centro_costo, aid))
         except Exception as e_cc:
@@ -403,7 +411,7 @@ def editar_activo(id):
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','proveedor']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','proveedor','cantidad']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
@@ -671,6 +679,7 @@ def importar_excel():
                 'vida':      leer_int(row_num, 14, 7),
                 'obs':       leer(row_num, 15),
                 'proveedor': leer(row_num, 16),
+                'cantidad':  leer_int(row_num, 17, 1),
             })
 
         if not filas:
@@ -734,11 +743,11 @@ def importar_excel():
 
                 if mode2 == 'pg':
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,cantidad) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '')
+                         str(f['doc']), int(vida), str(f['obs']), '', int(f.get('cantidad',1)))
                     )
                     try:
                         cur2.execute("UPDATE activos SET centro_costo=%s, proveedor=%s WHERE id=%s",
@@ -750,11 +759,11 @@ def importar_excel():
                     )
                 else:
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,cantidad) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '')
+                         str(f['doc']), int(vida), str(f['obs']), '', int(f.get('cantidad',1)))
                     )
                     try:
                         cur2.execute("UPDATE activos SET centro_costo=?, proveedor=? WHERE id=?",
@@ -842,7 +851,7 @@ def stats():
     total   = db_fetchone("SELECT COUNT(*) as n FROM activos")['n']
     buenos  = db_fetchone("SELECT COUNT(*) as n FROM activos WHERE estado='Bueno'")['n']
     malos   = db_fetchone("SELECT COUNT(*) as n FROM activos WHERE estado='Malo'")['n']
-    valor   = db_fetchone("SELECT COALESCE(SUM(precio),0) as s FROM activos")['s']
+    valor   = db_fetchone("SELECT COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as s FROM activos")['s']
     por_edificio = db_fetchall("SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio")
     return jsonify({'total':total,'buenos':buenos,'malos':malos,'valor':valor,'por_edificio':por_edificio})
 
@@ -868,10 +877,10 @@ def export_excel():
         ('Estado',          12), ('Edificio',        14), ('Sala',            20),
         ('Responsable',     20), ('Centro de Costo', 26), ('Proveedor',       20),
         ('Fecha Compra',    14), ('Precio',          14), ('N° Documento',    16),
-        ('Vida Útil (años)',14), ('Observaciones',   28),
+        ('Cantidad',         10), ('Vida Útil (años)',14), ('Observaciones',   28),
     ]
     keys = ['id','tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-            'responsable','centro_costo','proveedor','fecha_compra','precio',
+            'responsable','centro_costo','proveedor','fecha_compra','precio','cantidad',
             'documento','vida_util','observaciones']
 
     for col,(h,w) in enumerate(headers,1):
