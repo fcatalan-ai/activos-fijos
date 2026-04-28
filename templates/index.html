@@ -269,6 +269,7 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div class="field-box" style="margin-bottom:12px"><label>Sala / Dependencia</label><div class="val" id="p-sala"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Responsable</label><div class="val" id="p-resp"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Proveedor</label><div class="val" id="p-proveedor"></div></div>
+      <div class="field-box" style="margin-bottom:12px"><label>Cantidad</label><div class="val" id="p-cantidad"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Centro de Costo</label><div class="val" id="p-centro-costo" style="font-size:12px;color:#1F3864"></div></div>
       <div class="divider"></div>
       <div class="field-grid">
@@ -409,6 +410,7 @@ tr.seleccionado td{background:#EEF4FF !important}
       </select>
     </div>
     <div class="form-group"><label>Proveedor</label><input id="m-proveedor" placeholder="Ej: Importadora XYZ, Lider, etc."></div>
+    <div class="form-group"><label>Cantidad</label><input id="m-cantidad" type="number" min="1" value="1" placeholder="1"></div>
     <div class="form-group"><label>Observaciones</label><textarea id="m-obs" rows="2" style="resize:vertical"></textarea></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-activo')">Cancelar</button>
@@ -424,12 +426,13 @@ tr.seleccionado td{background:#EEF4FF !important}
     <h3 style="color:#27500A">📤 Importar Activos desde Excel</h3>
     <p style="font-size:13px;color:#555;margin-bottom:16px">Sube la plantilla Excel completada para cargar todos los activos de una vez.</p>
     <div style="background:#E2EFDA;border:1px solid #70AD47;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#27500A">
-      ✅ Usa la plantilla <strong>PLANTILLA_CARGA_ACTIVOS_v5.xlsx</strong><br>
+      ✅ Usa la plantilla <strong>PLANTILLA_CARGA_ACTIVOS_v6.xlsx</strong><br>
       ✅ Completa la hoja <strong>ACTIVOS</strong> (datos desde fila 4)<br>
       ✅ Usa las listas desplegables en: Tipo (col A), Estado (col F), Edificio (col G), Centro de Costo (col J)<br>
       ✅ La columna ID se asigna automáticamente — déjala vacía<br>
       ✅ Fecha en formato <strong>DD-MM-YYYY</strong> (col K) — formatea la columna como Texto en Excel<br>
-      ✅ Columna P: <strong>Proveedor</strong> (texto libre, opcional)
+      ✅ Columna P: <strong>Proveedor</strong> (texto libre, opcional)<br>
+      ✅ Columna Q: <strong>Cantidad</strong> (número entero, default 1 — útil para mobiliario en lote)
     </div>
     <div class="foto-upload-area" onclick="document.getElementById('excel-input').click()" id="excel-drop-area">
       <input type="file" id="excel-input" accept=".xlsx,.xls" onchange="previewExcel()">
@@ -654,7 +657,7 @@ function renderTabla(){
       <td style="font-size:12px">${a.edificio||''} — ${a.sala||''}</td>
       <td style="font-size:12px">${a.responsable||'—'}</td>
       <td style="font-size:11px;color:#1F3864">${a.centro_costo||'—'}</td>
-      <td style="font-size:12px">$${(a.precio||0).toLocaleString('es-CL')}</td>
+      <td style="font-size:12px">${(a.cantidad||1) > 1 ? '<span style=\"background:#E6F1FB;color:#0C447C;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700\">' + (a.cantidad||1) + ' uds</span> ' : ''}$${(a.precio||0).toLocaleString('es-CL')}</td>
       <td><button class="btn-sm" onclick="modoSeleccion?null:abrirPanel('${a.id}')">Ver ficha</button></td>
     </tr>`).join('');
 
@@ -716,6 +719,8 @@ async function abrirPanel(id){
   document.getElementById('p-sala').textContent=a.sala||'—';
   document.getElementById('p-resp').textContent=a.responsable||'—';
   document.getElementById('p-proveedor').textContent=a.proveedor||'—';
+  const cantEl = document.getElementById('p-cantidad');
+  if(cantEl) cantEl.textContent = (a.cantidad||1) > 1 ? (a.cantidad||1)+' unidades' : '1 unidad';
   document.getElementById('p-centro-costo').textContent=a.centro_costo||'Sin asignar';
   document.getElementById('p-fecha').textContent=a.fecha_compra||'—';
   document.getElementById('p-precio').textContent='$'+(a.precio||0).toLocaleString('es-CL');
@@ -939,6 +944,7 @@ function abrirModalNuevo(){
   ['subtipo','marca','modelo','serie','sala','resp','doc','obs','proveedor'].forEach(f=>
     document.getElementById('m-'+f).value='');
   document.getElementById('m-vida').value=4;
+  document.getElementById('m-cantidad').value=1;
   document.getElementById('m-precio').value='';
   document.getElementById('m-fecha').value='';
   document.getElementById('m-centro-costo').value='';
@@ -1060,6 +1066,7 @@ function _abrirModalEditar(){
   document.getElementById('m-fecha').value=fechaParaInput(a.fecha_compra||'');
   document.getElementById('m-precio').value=a.precio||'';
   document.getElementById('m-proveedor').value=a.proveedor||'';
+  document.getElementById('m-cantidad').value=a.cantidad||1;
   document.getElementById('m-obs').value=a.observaciones||'';
   document.getElementById('m-centro-costo').value=a.centro_costo||'';
   document.getElementById('modal-activo').classList.add('show');
@@ -1104,6 +1111,7 @@ async function guardarActivo(){
     precio:       parseFloat(document.getElementById('m-precio').value)||0,
     centro_costo: document.getElementById('m-centro-costo').value,
     proveedor:     document.getElementById('m-proveedor').value,
+    cantidad:      parseInt(document.getElementById('m-cantidad').value) || 1,
     observaciones:document.getElementById('m-obs').value,
   };
 
