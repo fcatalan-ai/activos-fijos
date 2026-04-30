@@ -207,6 +207,7 @@ tr.seleccionado td{background:#EEF4FF !important}
   <span class="bulk-bar-info" id="bulk-info">0 seleccionados</span>
   <button class="bulk-btn-del" style="background:#1F6B2E" onclick="abrirModalBulkDoc('factura')">📄 Subir factura</button>
   <button class="bulk-btn-del" style="background:#0C447C" onclick="abrirModalBulkDoc('oc')">📋 Subir OC</button>
+  <button class="bulk-btn-del" style="background:#7030A0" onclick="descargarQRsMasivo()">📊 Excel etiquetas</button>
   <button class="bulk-btn-del" onclick="eliminarSeleccionados()">🗑️ Eliminar</button>
   <button class="bulk-btn-cancel" onclick="limpiarSeleccion()">✕ Cancelar</button>
 </div>
@@ -353,7 +354,8 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div class="qr-box">
         <img id="qr-img" src="" alt="QR">
         <div style="font-size:12px;color:#666;margin-bottom:8px" id="qr-url"></div>
-        <a id="qr-download" href="#" download="qr.png"><button class="btn-sm">⬇️ Descargar QR</button></a>
+        <a id="qr-download" href="#" download="qr.png"><button class="btn-sm">👁️ Ver QR</button></a>
+  <button class="btn-sm" style="color:#27500A;border-color:#27500A" onclick="descargarQRDirecto()">📊 Excel etiqueta</button>
       </div>
       <div class="section-lbl" style="margin-top:14px">Código de barras</div>
       <div class="barcode-box">
@@ -1492,6 +1494,37 @@ function actualizarBarraSeleccion(){
 
 let bulkDocTipo = 'factura';
 let bulkDocFile = null;
+
+async function descargarQRDirecto(){
+  if(!activoActual) return;
+  window.location.href = '/api/activos/'+activoActual.id+'/qr/download';
+}
+
+async function descargarQRsMasivo(){
+  if(seleccionados.size === 0) return;
+  const ids = [...seleccionados];
+  const btn = document.querySelector('.bulk-bar button[onclick="descargarQRsMasivo()"]');
+  if(btn){ btn.disabled=true; btn.textContent='⏳ Generando...'; }
+  try {
+    const r = await fetch('/api/qr/zip', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ids})
+    });
+    if(!r.ok){ alert('❌ Error al generar ZIP'); return; }
+    const blob = await r.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `Etiquetas_QR_${ids.length}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch(e){
+    alert('❌ Error de conexión: '+e.message);
+  } finally {
+    if(btn){ btn.disabled=false; btn.textContent='📲 Descargar QRs'; }
+  }
+}
 
 function abrirModalBulkDoc(tipo){
   if(seleccionados.size === 0) return;
