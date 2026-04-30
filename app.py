@@ -803,6 +803,96 @@ def get_qr(id):
         b64 = _simple_qr_b64(id)
     return jsonify({'qr':b64,'url':url})
 
+@app.route('/api/activos/<id>/qr/download')
+@login_required
+def download_qr(id):
+    # Exportar Excel con ID, Subtipo, Link QR para impresora térmica
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    a = db_fetchone("SELECT id, subtipo, marca, modelo, sala, edificio FROM activos WHERE id=?", (id,))
+    if not a:
+        return jsonify({'error': 'Activo no encontrado'}), 404
+    url_ficha = request.host_url + f'ficha/{id}'
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "QR Etiquetas"
+    headers = ['ID Activo', 'Subtipo', 'Marca', 'Modelo', 'Edificio', 'Sala', 'Link QR']
+    for col, h in enumerate(headers, 1):
+        c = ws.cell(row=1, column=col, value=h)
+        c.font = Font(name='Arial', bold=True, color='FFFFFF', size=10)
+        c.fill = PatternFill('solid', fgColor='1F3864')
+        c.alignment = Alignment(horizontal='center')
+        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = 20
+    ws.column_dimensions['G'].width = 50
+    ws.cell(row=2, column=1, value=a['id'])
+    ws.cell(row=2, column=2, value=a['subtipo'] or '')
+    ws.cell(row=2, column=3, value=a['marca'] or '')
+    ws.cell(row=2, column=4, value=a['modelo'] or '')
+    ws.cell(row=2, column=5, value=a['edificio'] or '')
+    ws.cell(row=2, column=6, value=a['sala'] or '')
+    ws.cell(row=2, column=7, value=url_ficha)
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf,
+                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                    as_attachment=True,
+                    download_name=f'{id}_etiqueta.xlsx')
+
+@app.route('/api/qr/zip', methods=['POST'])
+@login_required
+def download_qr_zip():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
+    data = request.json
+    ids = data.get('ids', [])
+    if not ids:
+        return jsonify({'error': 'No se enviaron IDs'}), 400
+    try:
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "QR Etiquetas"
+        AZUL = '1F3864'
+        def hfill(): return PatternFill('solid', fgColor=AZUL)
+        def borde():
+            s = Side(style='thin', color='BFBFBF')
+            return Border(left=s, right=s, top=s, bottom=s)
+        headers = ['ID Activo', 'Subtipo', 'Marca', 'Modelo', 'Edificio', 'Sala', 'Link QR']
+        widths  = [16, 18, 14, 16, 14, 20, 55]
+        for col, (h, w) in enumerate(zip(headers, widths), 1):
+            c = ws.cell(row=1, column=col, value=h)
+            c.font = Font(name='Arial', bold=True, color='FFFFFF', size=10)
+            c.fill = hfill()
+            c.alignment = Alignment(horizontal='center', vertical='center')
+            c.border = borde()
+            ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = w
+        ws.row_dimensions[1].height = 22
+        for ri, id in enumerate(ids, 2):
+            a = db_fetchone("SELECT id,subtipo,marca,modelo,edificio,sala FROM activos WHERE id=?", (id,))
+            if not a: continue
+            url_ficha = request.host_url + f'ficha/{id}'
+            vals = [a['id'], a['subtipo'] or '', a['marca'] or '',
+                    a['modelo'] or '', a['edificio'] or '', a['sala'] or '', url_ficha]
+            bg = PatternFill('solid', fgColor='DEEAF1') if ri%2==0 else PatternFill('solid', fgColor='F2F2F2')
+            for col, val in enumerate(vals, 1):
+                c = ws.cell(row=ri, column=col, value=val)
+                c.font = Font(name='Arial', size=10)
+                c.fill = bg
+                c.border = borde()
+                c.alignment = Alignment(vertical='center')
+        ws.freeze_panes = 'A2'
+        buf = io.BytesIO()
+        wb.save(buf)
+        buf.seek(0)
+        from datetime import date
+        fname = f"Etiquetas_QR_{date.today().strftime('%Y%m%d')}.xlsx"
+        return send_file(buf,
+                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                        as_attachment=True,
+                        download_name=fname)
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
 def _simple_qr_b64(text):
     size,cell=21,10; img_size=size*cell+20
     seed=sum(ord(c)*(i+1) for i,c in enumerate(text))
