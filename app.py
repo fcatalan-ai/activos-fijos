@@ -1082,7 +1082,7 @@ def get_kpis():
     por_tipo   = db_fetchall(f"SELECT tipo, COUNT(*) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
     por_edificio=db_fetchall(f"SELECT edificio, COUNT(*) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
     por_cc     =db_fetchall(f"SELECT centro_costo, COUNT(*) as n FROM activos{filtro} AND centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
-    totales    = db_fetchone(f"SELECT COUNT(*) as total, COALESCE(SUM(precio),0) as valor FROM activos{filtro}", params)
+    totales    = db_fetchone(f"SELECT COUNT(*) as total, COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor FROM activos{filtro}", params)
     # Costo total mantenciones
     costo_mant = db_fetchone(
         "SELECT COALESCE(SUM(costo),0) as total FROM mantenciones")
@@ -1513,7 +1513,7 @@ def export_informe_anual():
                   SUM(CASE WHEN estado='Bueno' THEN 1 ELSE 0 END) as buenos,
                   SUM(CASE WHEN estado='Regular' THEN 1 ELSE 0 END) as regulares,
                   SUM(CASE WHEN estado='Malo' THEN 1 ELSE 0 END) as malos,
-                  COALESCE(SUM(precio),0) as valor
+                  COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor
            FROM activos GROUP BY edificio ORDER BY n DESC""")
 
     hdrs_ed = ["Edificio","Total Activos","Bueno","Regular","Malo","Valor Inventario"]
@@ -1546,7 +1546,7 @@ def export_informe_anual():
     tipo_data = db_fetchall(
         """SELECT tipo, subtipo, COUNT(*) as n,
                   SUM(CASE WHEN estado='Bueno' THEN 1 ELSE 0 END) as buenos,
-                  COALESCE(SUM(precio),0) as valor
+                  COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor
            FROM activos GROUP BY tipo, subtipo ORDER BY tipo, n DESC""")
 
     hdrs_t = ["Tipo","Subtipo","Cantidad","En buen estado","Valor"]
