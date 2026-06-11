@@ -160,13 +160,6 @@ with app.app_context():
                 else:
                     cur_m.execute(f"ALTER TABLE activos ADD COLUMN {col} TEXT DEFAULT ''")
             except: pass
-        # cantidad con DEFAULT 1
-        try:
-            if mode_m == 'pg':
-                cur_m.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS cantidad INTEGER DEFAULT 1")
-            else:
-                cur_m.execute("ALTER TABLE activos ADD COLUMN cantidad INTEGER DEFAULT 1")
-        except: pass
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -299,10 +292,10 @@ def get_activos():
     if q:
         p = f'%{q}%'
         if 'DATABASE_URL' in os.environ and os.environ['DATABASE_URL']:
-            sql += " AND (id ILIKE ? OR marca ILIKE ? OR modelo ILIKE ? OR serie ILIKE ? OR responsable ILIKE ? OR subtipo ILIKE ? OR proveedor ILIKE ? OR sala ILIKE ? OR edificio ILIKE ? OR documento ILIKE ?)"
+            sql += " AND (id ILIKE ? OR marca ILIKE ? OR modelo ILIKE ? OR serie ILIKE ? OR responsable ILIKE ? OR subtipo ILIKE ? OR proveedor ILIKE ? OR sala ILIKE ? OR edificio ILIKE ?)"
         else:
-            sql += " AND (LOWER(id) LIKE LOWER(?) OR LOWER(marca) LIKE LOWER(?) OR LOWER(modelo) LIKE LOWER(?) OR LOWER(serie) LIKE LOWER(?) OR LOWER(responsable) LIKE LOWER(?) OR LOWER(subtipo) LIKE LOWER(?) OR LOWER(proveedor) LIKE LOWER(?) OR LOWER(sala) LIKE LOWER(?) OR LOWER(edificio) LIKE LOWER(?) OR LOWER(documento) LIKE LOWER(?))"
-        params += [p,p,p,p,p,p,p,p,p,p]
+            sql += " AND (LOWER(id) LIKE LOWER(?) OR LOWER(marca) LIKE LOWER(?) OR LOWER(modelo) LIKE LOWER(?) OR LOWER(serie) LIKE LOWER(?) OR LOWER(responsable) LIKE LOWER(?) OR LOWER(subtipo) LIKE LOWER(?) OR LOWER(proveedor) LIKE LOWER(?) OR LOWER(sala) LIKE LOWER(?) OR LOWER(edificio) LIKE LOWER(?))"
+        params += [p,p,p,p,p,p,p,p,p]
     if tipo:     sql += " AND tipo=?";          params.append(tipo)
     if estado:   sql += " AND estado=?";        params.append(estado)
     if edificio: sql += " AND edificio=?";      params.append(edificio)
@@ -383,16 +376,15 @@ def crear_activo():
         aid = next_id(data.get('fecha_compra',''))
         vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
         centro_costo = data.get('centro_costo','')
-        cantidad = int(data.get('cantidad') or 1)
         db_execute('''INSERT INTO activos
             (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-             fecha_compra,precio,documento,vida_util,observaciones,foto,cantidad)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+             fecha_compra,precio,documento,vida_util,observaciones,foto)
+            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
             (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
              data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
              data.get('edificio'), data.get('sala'), data.get('responsable'),
              data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-             vida, data.get('observaciones',''), data.get('foto',''), cantidad))
+             vida, data.get('observaciones',''), data.get('foto','')))
         try:
             db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (centro_costo, aid))
         except Exception as e_cc:
@@ -411,7 +403,7 @@ def editar_activo(id):
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','proveedor','cantidad']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','proveedor']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
@@ -679,7 +671,6 @@ def importar_excel():
                 'vida':      leer_int(row_num, 14, 7),
                 'obs':       leer(row_num, 15),
                 'proveedor': leer(row_num, 16),
-                'cantidad':  leer_int(row_num, 17, 1),
             })
 
         if not filas:
@@ -743,11 +734,11 @@ def importar_excel():
 
                 if mode2 == 'pg':
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,cantidad) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '', int(f.get('cantidad',1)))
+                         str(f['doc']), int(vida), str(f['obs']), '')
                     )
                     try:
                         cur2.execute("UPDATE activos SET centro_costo=%s, proveedor=%s WHERE id=%s",
@@ -759,11 +750,11 @@ def importar_excel():
                     )
                 else:
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,cantidad) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '', int(f.get('cantidad',1)))
+                         str(f['doc']), int(vida), str(f['obs']), '')
                     )
                     try:
                         cur2.execute("UPDATE activos SET centro_costo=?, proveedor=? WHERE id=?",
@@ -802,96 +793,6 @@ def get_qr(id):
     except:
         b64 = _simple_qr_b64(id)
     return jsonify({'qr':b64,'url':url})
-
-@app.route('/api/activos/<id>/qr/download')
-@login_required
-def download_qr(id):
-    # Exportar Excel con ID, Subtipo, Link QR para impresora térmica
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment
-    a = db_fetchone("SELECT id, subtipo, marca, modelo, sala, edificio FROM activos WHERE id=?", (id,))
-    if not a:
-        return jsonify({'error': 'Activo no encontrado'}), 404
-    url_ficha = request.host_url + f'ficha/{id}'
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "QR Etiquetas"
-    headers = ['ID Activo', 'Subtipo', 'Marca', 'Modelo', 'Edificio', 'Sala', 'Link QR']
-    for col, h in enumerate(headers, 1):
-        c = ws.cell(row=1, column=col, value=h)
-        c.font = Font(name='Arial', bold=True, color='FFFFFF', size=10)
-        c.fill = PatternFill('solid', fgColor='1F3864')
-        c.alignment = Alignment(horizontal='center')
-        ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = 20
-    ws.column_dimensions['G'].width = 50
-    ws.cell(row=2, column=1, value=a['id'])
-    ws.cell(row=2, column=2, value=a['subtipo'] or '')
-    ws.cell(row=2, column=3, value=a['marca'] or '')
-    ws.cell(row=2, column=4, value=a['modelo'] or '')
-    ws.cell(row=2, column=5, value=a['edificio'] or '')
-    ws.cell(row=2, column=6, value=a['sala'] or '')
-    ws.cell(row=2, column=7, value=url_ficha)
-    buf = io.BytesIO()
-    wb.save(buf)
-    buf.seek(0)
-    return send_file(buf,
-                    mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                    as_attachment=True,
-                    download_name=f'{id}_etiqueta.xlsx')
-
-@app.route('/api/qr/zip', methods=['POST'])
-@login_required
-def download_qr_zip():
-    import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    data = request.json
-    ids = data.get('ids', [])
-    if not ids:
-        return jsonify({'error': 'No se enviaron IDs'}), 400
-    try:
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "QR Etiquetas"
-        AZUL = '1F3864'
-        def hfill(): return PatternFill('solid', fgColor=AZUL)
-        def borde():
-            s = Side(style='thin', color='BFBFBF')
-            return Border(left=s, right=s, top=s, bottom=s)
-        headers = ['ID Activo', 'Subtipo', 'Marca', 'Modelo', 'Edificio', 'Sala', 'Link QR']
-        widths  = [16, 18, 14, 16, 14, 20, 55]
-        for col, (h, w) in enumerate(zip(headers, widths), 1):
-            c = ws.cell(row=1, column=col, value=h)
-            c.font = Font(name='Arial', bold=True, color='FFFFFF', size=10)
-            c.fill = hfill()
-            c.alignment = Alignment(horizontal='center', vertical='center')
-            c.border = borde()
-            ws.column_dimensions[ws.cell(row=1, column=col).column_letter].width = w
-        ws.row_dimensions[1].height = 22
-        for ri, id in enumerate(ids, 2):
-            a = db_fetchone("SELECT id,subtipo,marca,modelo,edificio,sala FROM activos WHERE id=?", (id,))
-            if not a: continue
-            url_ficha = request.host_url + f'ficha/{id}'
-            vals = [a['id'], a['subtipo'] or '', a['marca'] or '',
-                    a['modelo'] or '', a['edificio'] or '', a['sala'] or '', url_ficha]
-            bg = PatternFill('solid', fgColor='DEEAF1') if ri%2==0 else PatternFill('solid', fgColor='F2F2F2')
-            for col, val in enumerate(vals, 1):
-                c = ws.cell(row=ri, column=col, value=val)
-                c.font = Font(name='Arial', size=10)
-                c.fill = bg
-                c.border = borde()
-                c.alignment = Alignment(vertical='center')
-        ws.freeze_panes = 'A2'
-        buf = io.BytesIO()
-        wb.save(buf)
-        buf.seek(0)
-        from datetime import date
-        fname = f"Etiquetas_QR_{date.today().strftime('%Y%m%d')}.xlsx"
-        return send_file(buf,
-                        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-                        as_attachment=True,
-                        download_name=fname)
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
 
 def _simple_qr_b64(text):
     size,cell=21,10; img_size=size*cell+20
@@ -938,9 +839,9 @@ def ficha_publica(id):
 @app.route('/api/stats')
 @login_required
 def stats():
-    total   = db_fetchone("SELECT COUNT(*) as n FROM activos")['n']
-    buenos  = db_fetchone("SELECT COUNT(*) as n FROM activos WHERE estado='Bueno'")['n']
-    malos   = db_fetchone("SELECT COUNT(*) as n FROM activos WHERE estado='Malo'")['n']
+    total   = db_fetchone("SELECT COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos")['n']
+    buenos  = db_fetchone("SELECT COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos WHERE estado='Bueno'")['n']
+    malos   = db_fetchone("SELECT COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos WHERE estado='Malo'")['n']
     valor   = db_fetchone("SELECT COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as s FROM activos")['s']
     por_edificio = db_fetchall("SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio")
     return jsonify({'total':total,'buenos':buenos,'malos':malos,'valor':valor,'por_edificio':por_edificio})
@@ -967,10 +868,10 @@ def export_excel():
         ('Estado',          12), ('Edificio',        14), ('Sala',            20),
         ('Responsable',     20), ('Centro de Costo', 26), ('Proveedor',       20),
         ('Fecha Compra',    14), ('Precio',          14), ('N° Documento',    16),
-        ('Cantidad',         10), ('Vida Útil (años)',14), ('Observaciones',   28),
+        ('Vida Útil (años)',14), ('Observaciones',   28),
     ]
     keys = ['id','tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-            'responsable','centro_costo','proveedor','fecha_compra','precio','cantidad',
+            'responsable','centro_costo','proveedor','fecha_compra','precio',
             'documento','vida_util','observaciones']
 
     for col,(h,w) in enumerate(headers,1):
@@ -1078,11 +979,11 @@ def get_kpis():
     if edificio:  filtro += " AND edificio=?";      params.append(edificio)
     if cc_filtro: filtro += " AND centro_costo=?";  params.append(cc_filtro)
 
-    por_estado = db_fetchall(f"SELECT estado, COUNT(*) as n FROM activos{filtro} GROUP BY estado", params)
-    por_tipo   = db_fetchall(f"SELECT tipo, COUNT(*) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
-    por_edificio=db_fetchall(f"SELECT edificio, COUNT(*) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
-    por_cc     =db_fetchall(f"SELECT centro_costo, COUNT(*) as n FROM activos{filtro} AND centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
-    totales    = db_fetchone(f"SELECT COUNT(*) as total, COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor FROM activos{filtro}", params)
+    por_estado = db_fetchall(f"SELECT estado, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY estado", params)
+    por_tipo   = db_fetchall(f"SELECT tipo, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
+    por_edificio=db_fetchall(f"SELECT edificio, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
+    por_cc     =db_fetchall(f"SELECT centro_costo, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} AND centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
+    totales    = db_fetchone(f"SELECT COALESCE(SUM(cantidad),COUNT(*)) as total, COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor FROM activos{filtro}", params)
     # Costo total mantenciones
     costo_mant = db_fetchone(
         "SELECT COALESCE(SUM(costo),0) as total FROM mantenciones")
@@ -1171,10 +1072,10 @@ def kpis_subtipo():
     if edificio: filtro += " AND edificio=?";      params.append(edificio)
 
     por_subtipo = db_fetchall(
-        f"SELECT subtipo, COUNT(*) as n FROM activos{filtro} GROUP BY subtipo ORDER BY n DESC", params)
+        f"SELECT subtipo, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY subtipo ORDER BY n DESC", params)
     filtro_ed = filtro + " AND edificio IS NOT NULL AND edificio != ''"
     por_subtipo_edificio = db_fetchall(
-        f"SELECT subtipo, edificio, COUNT(*) as n FROM activos{filtro_ed} GROUP BY subtipo, edificio ORDER BY subtipo, n DESC", params)
+        f"SELECT subtipo, edificio, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro_ed} GROUP BY subtipo, edificio ORDER BY subtipo, n DESC", params)
     return jsonify({
         'por_subtipo': por_subtipo,
         'por_subtipo_edificio': por_subtipo_edificio
@@ -1513,7 +1414,7 @@ def export_informe_anual():
                   SUM(CASE WHEN estado='Bueno' THEN 1 ELSE 0 END) as buenos,
                   SUM(CASE WHEN estado='Regular' THEN 1 ELSE 0 END) as regulares,
                   SUM(CASE WHEN estado='Malo' THEN 1 ELSE 0 END) as malos,
-                  COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor
+                  COALESCE(SUM(precio),0) as valor
            FROM activos GROUP BY edificio ORDER BY n DESC""")
 
     hdrs_ed = ["Edificio","Total Activos","Bueno","Regular","Malo","Valor Inventario"]
@@ -1546,7 +1447,7 @@ def export_informe_anual():
     tipo_data = db_fetchall(
         """SELECT tipo, subtipo, COUNT(*) as n,
                   SUM(CASE WHEN estado='Bueno' THEN 1 ELSE 0 END) as buenos,
-                  COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor
+                  COALESCE(SUM(precio),0) as valor
            FROM activos GROUP BY tipo, subtipo ORDER BY tipo, n DESC""")
 
     hdrs_t = ["Tipo","Subtipo","Cantidad","En buen estado","Valor"]
