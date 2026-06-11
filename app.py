@@ -189,6 +189,11 @@ with app.app_context():
                 usuario TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
+            cur_m.execute('''CREATE TABLE IF NOT EXISTS proveedores_activos (
+                id SERIAL PRIMARY KEY,
+                nombre TEXT UNIQUE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )''')
         else:
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -199,6 +204,11 @@ with app.app_context():
                 responsable TEXT,
                 usuario TEXT,
                 fecha TEXT,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )''')
+            cur_m.execute('''CREATE TABLE IF NOT EXISTS proveedores_activos (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                nombre TEXT UNIQUE NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )''')
             cur_m.execute('''CREATE TABLE IF NOT EXISTS mantenciones (
@@ -304,6 +314,8 @@ def get_activos():
     if estado:   sql += " AND estado=?";        params.append(estado)
     if edificio: sql += " AND edificio=?";      params.append(edificio)
     if cc:       sql += " AND centro_costo=?";  params.append(cc)
+    prov     = request.args.get('proveedor','')
+    if prov:     sql += " AND proveedor ILIKE ?" if 'DATABASE_URL' in os.environ and os.environ['DATABASE_URL'] else " AND LOWER(proveedor) LIKE LOWER(?)"; params.append(f'%{prov}%')
     if anio:
         sql += " AND (fecha_compra LIKE ? OR fecha_compra LIKE ?)"
         params += [f'%{anio}', f'{anio}%']
@@ -393,6 +405,11 @@ def crear_activo():
             db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (centro_costo, aid))
         except Exception as e_cc:
             print(f"centro_costo omitido: {e_cc}")
+        # Registrar proveedor si es nuevo
+        if centro_costo := data.get('proveedor','').strip():
+            try:
+                db_execute("INSERT INTO proveedores_activos (nombre) VALUES (?)", (centro_costo,))
+            except: pass
         db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                    (aid,'Alta','Activo registrado en el sistema',session['user']))
         return jsonify({'id': aid, 'ok': True})
@@ -1619,6 +1636,36 @@ def export_informe_anual():
     return send_file(buf, download_name=fname, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
+
+@app.route('/api/proveedores', methods=['GET'])
+@login_required
+def get_proveedores():
+    rows = db_fetchall("SELECT id, nombre FROM proveedores_activos ORDER BY nombre")
+    # Enriquecer con proveedores ya registrados en activos pero no en la tabla
+    existentes = {r['nombre'] for r in rows}
+    activos_provs = db_fetchall("SELECT DISTINCT proveedor FROM activos WHERE proveedor IS NOT NULL AND proveedor != '' ORDER BY proveedor")
+    for p in activos_provs:
+        if p['proveedor'] not in existentes:
+            try:
+                db_execute("INSERT INTO proveedores_activos (nombre) VALUES (?)", (p['proveedor'],))
+            except: pass
+    rows = db_fetchall("SELECT id, nombre FROM proveedores_activos ORDER BY nombre")
+    return jsonify(rows)
+
+@app.route('/api/proveedores', methods=['POST'])
+@admin_required
+def crear_proveedor():
+    data = request.json
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'error': 'Nombre requerido'}), 400
+    try:
+        db_execute("INSERT INTO proveedores_activos (nombre) VALUES (?)", (nombre,))
+        return jsonify({'ok': True, 'nombre': nombre})
+    except Exception as e:
+        if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
+            return jsonify({'ok': True, 'nombre': nombre, 'existia': True})
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/verificar-pin', methods=['POST'])
 @login_required
