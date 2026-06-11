@@ -138,7 +138,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     <div class="stat"><div class="stat-n">—</div><div class="stat-l">Cargando...</div></div>
   </div>
   <div class="toolbar">
-    <input type="text" id="buscar" placeholder="Buscar por ID, subtipo, marca, modelo, serie, responsable, sala, edificio, N° factura..." oninput="filtrar()">
+    <input type="text" id="buscar" placeholder="Buscar por ID, subtipo, marca, modelo, serie, responsable, sala, edificio..." oninput="filtrar()">
     <select id="f-tipo" onchange="filtrar()">
       <option value="">Todos los tipos</option>
       {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
@@ -157,6 +157,9 @@ tr.seleccionado td{background:#EEF4FF !important}
     </select>
     <select id="f-anio" onchange="filtrar()" style="min-width:110px">
       <option value="">Todos los años</option>
+    </select>
+    <select id="f-proveedor" onchange="filtrar()" style="min-width:160px">
+      <option value="">Todos los proveedores</option>
     </select>
     <button class="btn-export" onclick="window.location='/api/export/excel'">📥 Exportar Excel</button>
     {% if rol == 'admin' %}
@@ -207,7 +210,6 @@ tr.seleccionado td{background:#EEF4FF !important}
   <span class="bulk-bar-info" id="bulk-info">0 seleccionados</span>
   <button class="bulk-btn-del" style="background:#1F6B2E" onclick="abrirModalBulkDoc('factura')">📄 Subir factura</button>
   <button class="bulk-btn-del" style="background:#0C447C" onclick="abrirModalBulkDoc('oc')">📋 Subir OC</button>
-  <button class="bulk-btn-del" style="background:#7030A0" onclick="descargarQRsMasivo()">📊 Excel etiquetas</button>
   <button class="bulk-btn-del" onclick="eliminarSeleccionados()">🗑️ Eliminar</button>
   <button class="bulk-btn-cancel" onclick="limpiarSeleccion()">✕ Cancelar</button>
 </div>
@@ -270,7 +272,6 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div class="field-box" style="margin-bottom:12px"><label>Sala / Dependencia</label><div class="val" id="p-sala"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Responsable</label><div class="val" id="p-resp"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Proveedor</label><div class="val" id="p-proveedor"></div></div>
-      <div class="field-box" style="margin-bottom:12px"><label>Cantidad</label><div class="val" id="p-cantidad"></div></div>
       <div class="field-box" style="margin-bottom:12px"><label>Centro de Costo</label><div class="val" id="p-centro-costo" style="font-size:12px;color:#1F3864"></div></div>
       <div class="divider"></div>
       <div class="field-grid">
@@ -354,8 +355,7 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div class="qr-box">
         <img id="qr-img" src="" alt="QR">
         <div style="font-size:12px;color:#666;margin-bottom:8px" id="qr-url"></div>
-        <a id="qr-download" href="#" download="qr.png"><button class="btn-sm">👁️ Ver QR</button></a>
-  <button class="btn-sm" style="color:#27500A;border-color:#27500A" onclick="descargarQRDirecto()">📊 Excel etiqueta</button>
+        <a id="qr-download" href="#" download="qr.png"><button class="btn-sm">⬇️ Descargar QR</button></a>
       </div>
       <div class="section-lbl" style="margin-top:14px">Código de barras</div>
       <div class="barcode-box">
@@ -411,8 +411,16 @@ tr.seleccionado td{background:#EEF4FF !important}
         {% for cc in centros_costo %}<option value="{{ cc }}">{{ cc }}</option>{% endfor %}
       </select>
     </div>
-    <div class="form-group"><label>Proveedor</label><input id="m-proveedor" placeholder="Ej: Importadora XYZ, Lider, etc."></div>
-    <div class="form-group"><label>Cantidad</label><input id="m-cantidad" type="number" min="1" value="1" placeholder="1"></div>
+    <div class="form-group" style="position:relative">
+      <label>Proveedor</label>
+      <input id="m-proveedor" placeholder="Busca o escribe un proveedor nuevo..."
+        autocomplete="off"
+        oninput="filtrarProveedorModal(this.value)"
+        onfocus="filtrarProveedorModal(this.value)"
+        style="width:100%;padding:8px 10px;border:1px solid #ddd;border-radius:7px;font-size:13px">
+      <datalist id="m-proveedor-list"></datalist>
+      <div id="prov-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:0 0 7px 7px;max-height:180px;overflow-y:auto;z-index:500;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
+    </div>
     <div class="form-group"><label>Observaciones</label><textarea id="m-obs" rows="2" style="resize:vertical"></textarea></div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-activo')">Cancelar</button>
@@ -428,13 +436,12 @@ tr.seleccionado td{background:#EEF4FF !important}
     <h3 style="color:#27500A">📤 Importar Activos desde Excel</h3>
     <p style="font-size:13px;color:#555;margin-bottom:16px">Sube la plantilla Excel completada para cargar todos los activos de una vez.</p>
     <div style="background:#E2EFDA;border:1px solid #70AD47;border-radius:8px;padding:12px;margin-bottom:16px;font-size:12px;color:#27500A">
-      ✅ Usa la plantilla <strong>PLANTILLA_CARGA_ACTIVOS_v6.xlsx</strong><br>
+      ✅ Usa la plantilla <strong>PLANTILLA_CARGA_ACTIVOS_v5.xlsx</strong><br>
       ✅ Completa la hoja <strong>ACTIVOS</strong> (datos desde fila 4)<br>
       ✅ Usa las listas desplegables en: Tipo (col A), Estado (col F), Edificio (col G), Centro de Costo (col J)<br>
       ✅ La columna ID se asigna automáticamente — déjala vacía<br>
       ✅ Fecha en formato <strong>DD-MM-YYYY</strong> (col K) — formatea la columna como Texto en Excel<br>
-      ✅ Columna P: <strong>Proveedor</strong> (texto libre, opcional)<br>
-      ✅ Columna Q: <strong>Cantidad</strong> (número entero, default 1 — útil para mobiliario en lote)
+      ✅ Columna P: <strong>Proveedor</strong> (texto libre, opcional)
     </div>
     <div class="foto-upload-area" onclick="document.getElementById('excel-input').click()" id="excel-drop-area">
       <input type="file" id="excel-input" accept=".xlsx,.xls" onchange="previewExcel()">
@@ -578,7 +585,8 @@ function filtrar(){
   const edificio=document.getElementById('f-edificio').value;
   const cc=document.getElementById('f-cc').value;
   const anio=document.getElementById('f-anio').value;
-  cargarActivos(new URLSearchParams({q,tipo,estado,edificio,centro_costo:cc,anio}).toString());
+  const proveedor=document.getElementById('f-proveedor').value;
+  cargarActivos(new URLSearchParams({q,tipo,estado,edificio,centro_costo:cc,anio,proveedor}).toString());
 }
 
 const eB={Bueno:'badge-bueno','En Reparación':'badge-reparacion','De Baja':'badge-baja',Regular:'badge-regular',Malo:'badge-malo'};
@@ -659,7 +667,7 @@ function renderTabla(){
       <td style="font-size:12px">${a.edificio||''} — ${a.sala||''}</td>
       <td style="font-size:12px">${a.responsable||'—'}</td>
       <td style="font-size:11px;color:#1F3864">${a.centro_costo||'—'}</td>
-      <td style="font-size:12px">${(a.cantidad||1) > 1 ? '<span style=\"background:#E6F1FB;color:#0C447C;padding:2px 6px;border-radius:4px;font-size:11px;font-weight:700\">' + (a.cantidad||1) + ' uds</span> ' : ''}$${(a.precio||0).toLocaleString('es-CL')}</td>
+      <td style="font-size:12px">$${(a.precio||0).toLocaleString('es-CL')}</td>
       <td><button class="btn-sm" onclick="modoSeleccion?null:abrirPanel('${a.id}')">Ver ficha</button></td>
     </tr>`).join('');
 
@@ -721,8 +729,6 @@ async function abrirPanel(id){
   document.getElementById('p-sala').textContent=a.sala||'—';
   document.getElementById('p-resp').textContent=a.responsable||'—';
   document.getElementById('p-proveedor').textContent=a.proveedor||'—';
-  const cantEl = document.getElementById('p-cantidad');
-  if(cantEl) cantEl.textContent = (a.cantidad||1) > 1 ? (a.cantidad||1)+' unidades' : '1 unidad';
   document.getElementById('p-centro-costo').textContent=a.centro_costo||'Sin asignar';
   document.getElementById('p-fecha').textContent=a.fecha_compra||'—';
   document.getElementById('p-precio').textContent='$'+(a.precio||0).toLocaleString('es-CL');
@@ -946,12 +952,58 @@ function abrirModalNuevo(){
   ['subtipo','marca','modelo','serie','sala','resp','doc','obs','proveedor'].forEach(f=>
     document.getElementById('m-'+f).value='');
   document.getElementById('m-vida').value=4;
-  document.getElementById('m-cantidad').value=1;
   document.getElementById('m-precio').value='';
   document.getElementById('m-fecha').value='';
   document.getElementById('m-centro-costo').value='';
   document.getElementById('modal-activo').classList.add('show');
 }
+
+let todosProveedores = [];
+
+function filtrarProveedorModal(q){
+  const dropdown = document.getElementById('prov-dropdown');
+  q = (q||'').trim();
+  if(!q){ dropdown.style.display='none'; return; }
+  const ql = q.toLowerCase();
+  const coincidencias = todosProveedores.filter(p=>p.nombre.toLowerCase().includes(ql));
+  const exacto = todosProveedores.find(p=>p.nombre.toLowerCase()===ql);
+  let html = coincidencias.slice(0,8).map(p=>
+    `<div style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5"
+      onmousedown="seleccionarProveedor('${p.nombre.replace(/'/g,"\'")}')"
+      onmouseover="this.style.background='#f0f7f4'"
+      onmouseout="this.style.background=''">${p.nombre}</div>`
+  ).join('');
+  if(!exacto && q.length >= 2){
+    html += `<div style="padding:8px 12px;cursor:pointer;font-size:13px;color:#0D4F3C;font-weight:600;background:#E2EFDA"
+      onmousedown="seleccionarProveedor('${q.replace(/'/g,"\'")}', true)"
+      onmouseover="this.style.background='#c8e6d0'"
+      onmouseout="this.style.background='#E2EFDA'">✚ Agregar nuevo: "${q}"</div>`;
+  }
+  dropdown.innerHTML = html || '';
+  dropdown.style.display = html ? 'block' : 'none';
+}
+
+async function seleccionarProveedor(nombre, esNuevo=false){
+  document.getElementById('m-proveedor').value = nombre;
+  document.getElementById('prov-dropdown').style.display = 'none';
+  if(esNuevo){
+    // Registrar en BD
+    await fetch('/api/proveedores', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({nombre})
+    });
+    // Actualizar lista local
+    await cargarProveedores();
+  }
+}
+
+document.addEventListener('click', e=>{
+  if(!e.target.closest('#modal-activo')){
+    const dd = document.getElementById('prov-dropdown');
+    if(dd) dd.style.display='none';
+  }
+});
 
 function fechaParaInput(f){
   if(!f) return '';
@@ -1068,7 +1120,6 @@ function _abrirModalEditar(){
   document.getElementById('m-fecha').value=fechaParaInput(a.fecha_compra||'');
   document.getElementById('m-precio').value=a.precio||'';
   document.getElementById('m-proveedor').value=a.proveedor||'';
-  document.getElementById('m-cantidad').value=a.cantidad||1;
   document.getElementById('m-obs').value=a.observaciones||'';
   document.getElementById('m-centro-costo').value=a.centro_costo||'';
   document.getElementById('modal-activo').classList.add('show');
@@ -1113,7 +1164,6 @@ async function guardarActivo(){
     precio:       parseFloat(document.getElementById('m-precio').value)||0,
     centro_costo: document.getElementById('m-centro-costo').value,
     proveedor:     document.getElementById('m-proveedor').value,
-    cantidad:      parseInt(document.getElementById('m-cantidad').value) || 1,
     observaciones:document.getElementById('m-obs').value,
   };
 
@@ -1495,37 +1545,6 @@ function actualizarBarraSeleccion(){
 let bulkDocTipo = 'factura';
 let bulkDocFile = null;
 
-async function descargarQRDirecto(){
-  if(!activoActual) return;
-  window.location.href = '/api/activos/'+activoActual.id+'/qr/download';
-}
-
-async function descargarQRsMasivo(){
-  if(seleccionados.size === 0) return;
-  const ids = [...seleccionados];
-  const btn = document.querySelector('.bulk-bar button[onclick="descargarQRsMasivo()"]');
-  if(btn){ btn.disabled=true; btn.textContent='⏳ Generando...'; }
-  try {
-    const r = await fetch('/api/qr/zip', {
-      method: 'POST',
-      headers: {'Content-Type':'application/json'},
-      body: JSON.stringify({ids})
-    });
-    if(!r.ok){ alert('❌ Error al generar ZIP'); return; }
-    const blob = await r.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `Etiquetas_QR_${ids.length}.xlsx`;
-    a.click();
-    URL.revokeObjectURL(url);
-  } catch(e){
-    alert('❌ Error de conexión: '+e.message);
-  } finally {
-    if(btn){ btn.disabled=false; btn.textContent='📲 Descargar QRs'; }
-  }
-}
-
 function abrirModalBulkDoc(tipo){
   if(seleccionados.size === 0) return;
   bulkDocTipo = tipo;
@@ -1622,6 +1641,24 @@ async function _eliminarSeleccionados(){
 
 cargarStats();
 cargarActivos();
+
+// Cargar proveedores para filtro y modal
+async function cargarProveedores(){
+  const r = await fetch('/api/proveedores');
+  todosProveedores = await r.json();
+  // Poblar filtro (limpiar y repoblar)
+  const sel = document.getElementById('f-proveedor');
+  const valActual = sel.value;
+  sel.innerHTML = '<option value="">Todos los proveedores</option>';
+  todosProveedores.forEach(p=>{
+    const o = document.createElement('option');
+    o.value = p.nombre; o.textContent = p.nombre;
+    sel.appendChild(o);
+  });
+  sel.value = valActual;
+  return todosProveedores;
+}
+cargarProveedores();
 
 // Poblar filtro de años dinámicamente
 (async function(){
