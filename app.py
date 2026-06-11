@@ -25,6 +25,10 @@ TIPOS = [
     'Equipamiento Deportivo',
     'Mobiliario',
     'Muebles y Útiles',
+    'Terrenos',
+    'Bien Raíz',
+    'Instalaciones Generales',
+    'Obras en Construcción',
     'Otro',
 ]
 
