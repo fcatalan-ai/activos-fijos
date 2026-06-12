@@ -1637,6 +1637,33 @@ def export_informe_anual():
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
+@app.route('/admin/fusionar-proveedor')
+@admin_required
+def fusionar_proveedor():
+    viejo = request.args.get('viejo','').strip()
+    nuevo = request.args.get('nuevo','').strip()
+    if not viejo or not nuevo:
+        return '''<h3>Fusionar Proveedor</h3>
+        <p>Uso: /admin/fusionar-proveedor?viejo=NOMBRE_VIEJO&nuevo=NOMBRE_NUEVO</p>
+        <p>Ejemplo: /admin/fusionar-proveedor?viejo=ASSA+ABLOY+CHILE&nuevo=ASSA+ABLOY+CHILE+SPA</p>
+        <br><a href="/">Volver</a>'''
+    try:
+        conn, mode = get_db()
+        cur = conn.cursor()
+        if mode == 'pg':
+            cur.execute("UPDATE activos SET proveedor=%s WHERE proveedor=%s", (nuevo, viejo))
+            n = cur.rowcount
+            cur.execute("DELETE FROM proveedores_activos WHERE nombre=%s", (viejo,))
+        else:
+            cur.execute("UPDATE activos SET proveedor=? WHERE proveedor=?", (nuevo, viejo))
+            n = cur.rowcount
+            cur.execute("DELETE FROM proveedores_activos WHERE nombre=?", (viejo,))
+        conn.commit()
+        conn.close()
+        return f'✅ {n} activos actualizados de "{viejo}" → "{nuevo}"<br><br><a href="/">Volver al inicio</a>'
+    except Exception as e:
+        return f'❌ Error: {e}<br><br><a href="/">Volver</a>'
+
 @app.route('/api/proveedores', methods=['GET'])
 @login_required
 def get_proveedores():
