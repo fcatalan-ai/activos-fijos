@@ -181,11 +181,12 @@ tr.seleccionado td{background:#EEF4FF !important}
           <th class="sortable" onclick="ordenarPor('edificio')">Edificio / Sala</th>
           <th class="sortable" onclick="ordenarPor('responsable')">Responsable</th>
           <th class="sortable" onclick="ordenarPor('centro_costo')">Centro de Costo</th>
+          <th class="sortable" onclick="ordenarPor('documento')">N° Factura</th>
           <th class="sortable" onclick="ordenarPor('precio')">Precio</th>
           <th></th>
         </tr>
       </thead>
-      <tbody id="tabla-body"><tr><td colspan="11" class="loading">Cargando activos...</td></tr></tbody>
+      <tbody id="tabla-body"><tr><td colspan="12" class="loading">Cargando activos...</td></tr></tbody>
     </table>
     <div class="pag-bar" id="pag-bar" style="display:none">
       <div class="pag-info" id="pag-info"></div>
@@ -608,7 +609,7 @@ function ordenarPor(col){
     th.classList.remove('sort-asc','sort-desc');
   });
   const ths = document.querySelectorAll('th.sortable');
-  const cols = ['id','subtipo','marca','serie','estado','edificio','responsable','centro_costo','precio'];
+  const cols = ['id','subtipo','marca','serie','estado','edificio','responsable','centro_costo','documento','precio'];
   const idx = cols.indexOf(col);
   if(idx >= 0 && ths[idx]){
     ths[idx].classList.add(sortDir === 'asc' ? 'sort-asc' : 'sort-desc');
@@ -642,7 +643,7 @@ function ordenarPor(col){
 
 function renderTabla(){
   if(!activos.length){
-    document.getElementById('tabla-body').innerHTML='<tr><td colspan="11" class="loading">No se encontraron activos</td></tr>';
+    document.getElementById('tabla-body').innerHTML='<tr><td colspan="12" class="loading">No se encontraron activos</td></tr>';
     document.getElementById('pag-bar').style.display='none';
     return;
   }
@@ -667,6 +668,7 @@ function renderTabla(){
       <td style="font-size:12px">${a.edificio||''} — ${a.sala||''}</td>
       <td style="font-size:12px">${a.responsable||'—'}</td>
       <td style="font-size:11px;color:#1F3864">${a.centro_costo||'—'}</td>
+      <td style="font-size:11px;color:#888">${a.documento||'—'}</td>
       <td style="font-size:12px">$${(a.precio||0).toLocaleString('es-CL')}</td>
       <td><button class="btn-sm" onclick="modoSeleccion?null:abrirPanel('${a.id}')">Ver ficha</button></td>
     </tr>`).join('');
