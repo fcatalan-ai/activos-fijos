@@ -306,10 +306,10 @@ def get_activos():
     if q:
         p = f'%{q}%'
         if 'DATABASE_URL' in os.environ and os.environ['DATABASE_URL']:
-            sql += " AND (id ILIKE ? OR marca ILIKE ? OR modelo ILIKE ? OR serie ILIKE ? OR responsable ILIKE ? OR subtipo ILIKE ? OR proveedor ILIKE ? OR sala ILIKE ? OR edificio ILIKE ?)"
+            sql += " AND (id ILIKE ? OR marca ILIKE ? OR modelo ILIKE ? OR serie ILIKE ? OR responsable ILIKE ? OR subtipo ILIKE ? OR proveedor ILIKE ? OR sala ILIKE ? OR edificio ILIKE ? OR documento ILIKE ?)"
         else:
-            sql += " AND (LOWER(id) LIKE LOWER(?) OR LOWER(marca) LIKE LOWER(?) OR LOWER(modelo) LIKE LOWER(?) OR LOWER(serie) LIKE LOWER(?) OR LOWER(responsable) LIKE LOWER(?) OR LOWER(subtipo) LIKE LOWER(?) OR LOWER(proveedor) LIKE LOWER(?) OR LOWER(sala) LIKE LOWER(?) OR LOWER(edificio) LIKE LOWER(?))"
-        params += [p,p,p,p,p,p,p,p,p]
+            sql += " AND (LOWER(id) LIKE LOWER(?) OR LOWER(marca) LIKE LOWER(?) OR LOWER(modelo) LIKE LOWER(?) OR LOWER(serie) LIKE LOWER(?) OR LOWER(responsable) LIKE LOWER(?) OR LOWER(subtipo) LIKE LOWER(?) OR LOWER(proveedor) LIKE LOWER(?) OR LOWER(sala) LIKE LOWER(?) OR LOWER(edificio) LIKE LOWER(?) OR LOWER(documento) LIKE LOWER(?))"
+        params += [p,p,p,p,p,p,p,p,p,p]
     if tipo:     sql += " AND tipo=?";          params.append(tipo)
     if estado:   sql += " AND estado=?";        params.append(estado)
     if edificio: sql += " AND edificio=?";      params.append(edificio)
