@@ -215,7 +215,7 @@ def next_id(fecha_compra=None):
                 except: pass
         except: pass
     # Correlativo GLOBAL — buscar el mayor en TODOS los activos AF-XX-XXXX
-    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE ?", ('AF-%',))
     nums = []
     for r in rows:
         try:
@@ -390,7 +390,7 @@ def editar_activo(id):
 def corregir_anios_id():
     from datetime import datetime as dt
     resultados = []
-    rows = db_fetchall("SELECT id, fecha_compra FROM activos WHERE id LIKE 'AF-%' ORDER BY id")
+    rows = db_fetchall("SELECT id, fecha_compra FROM activos WHERE id LIKE ? ORDER BY id", ('AF-%',))
     cambios = 0
     errores = []
 
@@ -639,9 +639,9 @@ def importar_excel():
 
         # Obtener el correlativo actual (maximo en la BD)
         if mode2 == 'pg':
-            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+            cur2.execute("SELECT id FROM activos WHERE id LIKE %s", ('AF-%',))
         else:
-            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
+            cur2.execute("SELECT id FROM activos WHERE id LIKE ?", ('AF-%',))
         existing = cur2.fetchall()
 
         nums = []
