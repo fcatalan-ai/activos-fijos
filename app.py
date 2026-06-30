@@ -256,6 +256,16 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.route('/api/verificar-pin', methods=['POST'])
+@login_required
+def verificar_pin_operacion():
+    data = request.json or {}
+    pin = str(data.get('pin','')).strip()
+    pin_operacion = os.environ.get('PIN_OPERACION', '0000')
+    if pin == pin_operacion:
+        return jsonify({'ok': True})
+    return jsonify({'ok': False}), 401
+
 @app.route('/login', methods=['GET','POST'])
 def login():
     error = ''
