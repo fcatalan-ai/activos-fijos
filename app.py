@@ -101,8 +101,17 @@ def init_db():
         admin_pass  = os.environ.get('ADMIN_PASS','admin123')
         cur.execute("INSERT INTO usuarios (nombre,email,password,rol) VALUES (%s,%s,%s,%s) ON CONFLICT (email) DO NOTHING",
                     ('Administrador', admin_email, admin_pass, 'admin'))
-        cur.execute("UPDATE usuarios SET password=%s, email=%s WHERE rol='admin'",
-                    (admin_pass, admin_email))
+        otro = None
+        cur.execute("SELECT id, rol FROM usuarios WHERE email=%s", (admin_email,))
+        row = cur.fetchone()
+        if row and row[1] != 'admin':
+            otro = row
+        if otro:
+            print(f"[init_db] ADMIN_EMAIL '{admin_email}' ya pertenece a otro usuario (id={otro[0]}, rol={otro[1]}). No se actualiza el email del admin para evitar conflicto; solo se actualiza la contraseña del admin existente.")
+            cur.execute("UPDATE usuarios SET password=%s WHERE rol='admin'", (admin_pass,))
+        else:
+            cur.execute("UPDATE usuarios SET password=%s, email=%s WHERE rol='admin'",
+                        (admin_pass, admin_email))
     else:
         cur = conn.cursor()
         cur.execute('''CREATE TABLE IF NOT EXISTS activos (
@@ -128,8 +137,14 @@ def init_db():
         admin_pass  = os.environ.get('ADMIN_PASS','admin123')
         cur.execute("INSERT OR IGNORE INTO usuarios (nombre,email,password,rol) VALUES (?,?,?,?)",
                     ('Administrador', admin_email, admin_pass, 'admin'))
-        cur.execute("UPDATE usuarios SET password=?, email=? WHERE rol='admin'",
-                    (admin_pass, admin_email))
+        cur.execute("SELECT id, rol FROM usuarios WHERE email=?", (admin_email,))
+        row = cur.fetchone()
+        otro = row if (row and row[1] != 'admin') else None
+        if otro:
+            cur.execute("UPDATE usuarios SET password=? WHERE rol='admin'", (admin_pass,))
+        else:
+            cur.execute("UPDATE usuarios SET password=?, email=? WHERE rol='admin'",
+                        (admin_pass, admin_email))
     conn.commit()
     conn.close()
 
