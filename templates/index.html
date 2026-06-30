@@ -401,6 +401,14 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div class="form-group"><label>Responsable</label><input id="m-resp" placeholder="Nombre completo"></div>
       <div class="form-group"><label>N° Documento / Factura</label><input id="m-doc" placeholder="Ej: F-12956"></div>
     </div>
+    <div class="form-group">
+      <label>Foto de la factura (opcional)</label>
+      <div class="foto-upload-area" style="padding:10px" onclick="document.getElementById('m-factura-input').click()">
+        <input type="file" id="m-factura-input" accept="image/*" onchange="previewFacturaModal()">
+        <div id="m-factura-label" style="font-size:12px;color:#888">📎 Click para adjuntar imagen de la factura</div>
+      </div>
+      <div id="m-factura-preview" style="margin-top:8px;text-align:center"></div>
+    </div>
     <div class="form-row">
       <div class="form-group"><label>Fecha de compra</label><input id="m-fecha" type="date"></div>
       <div class="form-group"><label>Precio ($)</label><input id="m-precio" type="number" placeholder="0" min="0"></div>
@@ -957,6 +965,7 @@ function abrirModalNuevo(){
   document.getElementById('m-precio').value='';
   document.getElementById('m-fecha').value='';
   document.getElementById('m-centro-costo').value='';
+  resetFacturaModal();
   document.getElementById('modal-activo').classList.add('show');
 }
 
@@ -1103,6 +1112,7 @@ function abrirModalEditar(){
 function _abrirModalEditar(){
   const btn = document.querySelector('#modal-activo .btn-save');
   if(btn){ btn.disabled=false; btn.textContent='Guardar activo'; }
+  resetFacturaModal();
   const a=activoActual;
   document.getElementById('modal-title').textContent='Editar Activo — '+a.id;
   document.getElementById('m-id').value=a.id;
@@ -1143,6 +1153,27 @@ function _abrirModalTraslado(){
 }
 
 function cerrarModal(id){ document.getElementById(id).classList.remove('show'); }
+
+let m_facturaFile = null;
+
+function previewFacturaModal(){
+  const file = document.getElementById('m-factura-input').files[0];
+  if(!file) return;
+  m_facturaFile = file;
+  document.getElementById('m-factura-label').innerHTML = `✅ ${file.name} <small style="color:#27500A">(${(file.size/1024).toFixed(0)} KB)</small>`;
+  const reader = new FileReader();
+  reader.onload = e => {
+    document.getElementById('m-factura-preview').innerHTML = `<img src="${e.target.result}" style="max-height:100px;border-radius:6px;border:1px solid #ddd">`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function resetFacturaModal(){
+  m_facturaFile = null;
+  document.getElementById('m-factura-input').value = '';
+  document.getElementById('m-factura-preview').innerHTML = '';
+  document.getElementById('m-factura-label').innerHTML = '📎 Click para adjuntar imagen de la factura';
+}
 
 async function guardarActivo(){
   // Validacion basica
@@ -1193,7 +1224,22 @@ async function guardarActivo(){
     }
 
     const d = await r.json();
+    const nuevoId = id || d.id;
+
+    // Subir factura si se adjuntó una imagen
+    if(m_facturaFile && nuevoId){
+      btnGuardar.textContent = 'Subiendo factura...';
+      try{
+        const fd = new FormData();
+        fd.append('archivo', m_facturaFile);
+        await fetch(`/api/activos/${nuevoId}/documento?tipo=factura`, {method:'POST', body:fd});
+      } catch(err){
+        console.error('Error subiendo factura:', err);
+      }
+    }
+
     cerrarModal('modal-activo');
+    resetFacturaModal();
     cargarStats();
     filtrar();
     if(!id && d.id) abrirPanel(d.id);
