@@ -8,6 +8,16 @@ app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
 
+# Cloudinary config (para fotos de activos)
+import cloudinary
+import cloudinary.uploader
+cloudinary.config(
+    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME',''),
+    api_key    = os.environ.get('CLOUDINARY_API_KEY',''),
+    api_secret = os.environ.get('CLOUDINARY_API_SECRET',''),
+    secure     = True
+)
+
 TIPOS = [
     'Equipamiento Tecnológico',
     'Equipamiento Audiovisual',
@@ -163,6 +173,18 @@ with app.app_context():
             else:
                 cur_m.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
         except: pass
+        for col, tipo_col, default in [
+            ('url_factura', 'TEXT', "''"),
+            ('url_oc', 'TEXT', "''"),
+            ('proveedor', 'TEXT', "''"),
+            ('cantidad', 'INTEGER', '1'),
+        ]:
+            try:
+                if mode_m == 'pg':
+                    cur_m.execute(f"ALTER TABLE activos ADD COLUMN IF NOT EXISTS {col} {tipo_col} DEFAULT {default}")
+                else:
+                    cur_m.execute(f"ALTER TABLE activos ADD COLUMN {col} {tipo_col} DEFAULT {default}")
+            except: pass
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -566,12 +588,70 @@ def subir_foto(id):
     ext = file.filename.rsplit('.',1)[-1].lower()
     if ext not in {'jpg','jpeg','png','gif','webp'}: return jsonify({'error':'Formato no permitido'}), 400
     data = file.read()
-    if len(data) > 5*1024*1024: return jsonify({'error':'Imagen muy grande (máx 5MB)'}), 400
-    b64 = f"data:image/{ext};base64,"+base64.b64encode(data).decode()
-    db_execute("UPDATE activos SET foto=? WHERE id=?", (b64,id))
-    db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-               (id,'Foto','Foto del activo actualizada',session['user']))
-    return jsonify({'ok':True,'foto':b64})
+    if len(data) > 10*1024*1024: return jsonify({'error':'Imagen muy grande (máx 10MB)'}), 400
+    try:
+        resultado = cloudinary.uploader.upload(
+            data,
+            folder='activos-fijos',
+            public_id=f'activo_{id}',
+            overwrite=True,
+            resource_type='image'
+        )
+        url_foto = resultado['secure_url']
+        db_execute("UPDATE activos SET foto=? WHERE id=?", (url_foto,id))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (id,'Foto','Foto del activo actualizada',session['user']))
+        return jsonify({'ok':True,'foto':url_foto})
+    except Exception as e:
+        print(f"Error subir foto Cloudinary: {e}")
+        return jsonify({'error':str(e)}), 500
+
+@app.route('/api/activos/<id>/foto', methods=['DELETE'])
+@admin_required
+def eliminar_foto(id):
+    try:
+        try:
+            cloudinary.uploader.destroy(f'activos-fijos/activo_{id}', resource_type='image')
+        except: pass
+        db_execute("UPDATE activos SET foto='' WHERE id=?", (id,))
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/activos/<id>/documento', methods=['POST'])
+@admin_required
+def subir_documento(id):
+    tipo_doc = request.args.get('tipo','factura')  # factura u oc
+    if 'archivo' not in request.files: return jsonify({'error':'No se envió archivo'}), 400
+    file = request.files['archivo']
+    ext = file.filename.rsplit('.',1)[-1].lower()
+    if ext not in {'pdf','jpg','jpeg','png'}: return jsonify({'error':'Solo PDF o imagen'}), 400
+    data = file.read()
+    if len(data) > 5*1024*1024: return jsonify({'error':'Archivo muy grande (máx 5MB)'}), 400
+    try:
+        # Se guarda como base64 directo en la BD (PDFs livianos, evita problemas de
+        # visualización pública de Cloudinary en archivos tipo 'raw')
+        mime = 'application/pdf' if ext=='pdf' else f'image/{ext}'
+        b64 = f"data:{mime};base64," + base64.b64encode(data).decode()
+        campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
+        db_execute(f"UPDATE activos SET {campo}=? WHERE id=?", (b64, id))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (id, 'Documento', f'{tipo_doc.upper()} subida/actualizada', session['user']))
+        return jsonify({'ok':True, 'url': b64, 'tipo': tipo_doc})
+    except Exception as e:
+        print(f"Error subir documento: {e}")
+        return jsonify({'error':str(e)}), 500
+
+@app.route('/api/activos/<id>/documento', methods=['DELETE'])
+@admin_required
+def eliminar_documento(id):
+    tipo_doc = request.args.get('tipo','factura')
+    campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
+    try:
+        db_execute(f"UPDATE activos SET {campo}='' WHERE id=?", (id,))
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 @app.route('/api/debug-excel', methods=['POST'])
