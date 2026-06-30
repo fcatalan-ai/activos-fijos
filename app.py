@@ -545,6 +545,7 @@ def diagnostico_correlativos():
     return html
 
 
+@app.route('/api/activos/<id>', methods=['DELETE'])
 @admin_required
 def eliminar_activo(id):
     if not db_fetchone("SELECT id FROM activos WHERE id=?", (id,)):
