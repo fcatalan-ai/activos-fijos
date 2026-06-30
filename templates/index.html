@@ -740,7 +740,7 @@ async function abrirPanel(id){
   document.getElementById('p-resp').textContent=a.responsable||'—';
   document.getElementById('p-proveedor').textContent=a.proveedor||'—';
   document.getElementById('p-centro-costo').textContent=a.centro_costo||'Sin asignar';
-  document.getElementById('p-fecha').textContent=a.fecha_compra||'—';
+  document.getElementById('p-fecha').textContent=formatearFechaDisplay(a.fecha_compra);
   document.getElementById('p-precio').textContent='$'+(a.precio||0).toLocaleString('es-CL');
   document.getElementById('p-doc').textContent=a.documento||'—';
   document.getElementById('p-obs').textContent=a.observaciones||'Sin observaciones';
@@ -1015,6 +1015,24 @@ document.addEventListener('click', e=>{
     if(dd) dd.style.display='none';
   }
 });
+
+function formatearFechaDisplay(f){
+  if(!f) return '—';
+  f = String(f).trim();
+  // YYYY-MM-DD
+  if(/^\d{4}-\d{2}-\d{2}$/.test(f)){
+    const [y,m,d] = f.split('-');
+    return `${d}/${m}/${y}`;
+  }
+  // DD-MM-YYYY o MM-DD-YYYY (ambiguo, usamos heurística: si parts[1]>12 es mes invalido)
+  if(/^\d{2}-\d{2}-\d{4}$/.test(f)){
+    const [a,b,y] = f.split('-');
+    const an = parseInt(a), bn = parseInt(b);
+    if(bn > 12) return `${b}/${a}/${y}`; // era MM-DD-YYYY
+    return `${a}/${b}/${y}`; // DD-MM-YYYY normal
+  }
+  return f;
+}
 
 function fechaParaInput(f){
   if(!f) return '';
