@@ -7,17 +7,6 @@ app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
-PIN_OPERACION = os.environ.get('PIN_OPERACION', '0000')
-
-# Cloudinary config
-import cloudinary
-import cloudinary.uploader
-cloudinary.config(
-    cloud_name = os.environ.get('CLOUDINARY_CLOUD_NAME',''),
-    api_key    = os.environ.get('CLOUDINARY_API_KEY',''),
-    api_secret = os.environ.get('CLOUDINARY_API_SECRET',''),
-    secure     = True
-)
 
 TIPOS = [
     'Equipamiento Tecnológico',
@@ -25,10 +14,6 @@ TIPOS = [
     'Equipamiento Deportivo',
     'Mobiliario',
     'Muebles y Útiles',
-    'Terrenos',
-    'Bien Raíz',
-    'Instalaciones Generales',
-    'Obras en Construcción',
     'Otro',
 ]
 
@@ -156,14 +141,13 @@ with app.app_context():
     try:
         conn_m, mode_m = get_db()
         cur_m = conn_m.cursor()
-        # Agregar columnas nuevas si no existen
-        for col in ['centro_costo','url_factura','url_oc','proveedor']:
-            try:
-                if mode_m == 'pg':
-                    cur_m.execute(f"ALTER TABLE activos ADD COLUMN IF NOT EXISTS {col} TEXT DEFAULT ''")
-                else:
-                    cur_m.execute(f"ALTER TABLE activos ADD COLUMN {col} TEXT DEFAULT ''")
-            except: pass
+        # Agregar columna centro_costo si no existe
+        try:
+            if mode_m == 'pg':
+                cur_m.execute("ALTER TABLE activos ADD COLUMN IF NOT EXISTS centro_costo TEXT DEFAULT ''")
+            else:
+                cur_m.execute("ALTER TABLE activos ADD COLUMN centro_costo TEXT DEFAULT ''")
+        except: pass
         if mode_m == 'pg':
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id SERIAL PRIMARY KEY,
@@ -189,11 +173,6 @@ with app.app_context():
                 usuario TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )''')
-            cur_m.execute('''CREATE TABLE IF NOT EXISTS proveedores_activos (
-                id SERIAL PRIMARY KEY,
-                nombre TEXT UNIQUE NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )''')
         else:
             cur_m.execute('''CREATE TABLE IF NOT EXISTS movimientos_activos (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -204,11 +183,6 @@ with app.app_context():
                 responsable TEXT,
                 usuario TEXT,
                 fecha TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )''')
-            cur_m.execute('''CREATE TABLE IF NOT EXISTS proveedores_activos (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                nombre TEXT UNIQUE NOT NULL,
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )''')
             cur_m.execute('''CREATE TABLE IF NOT EXISTS mantenciones (
@@ -241,7 +215,7 @@ def next_id(fecha_compra=None):
                 except: pass
         except: pass
     # Correlativo GLOBAL — buscar el mayor en TODOS los activos AF-XX-XXXX
-    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE ?", ('AF-%',))
+    rows = db_fetchall("SELECT id FROM activos WHERE id LIKE 'AF-%'")
     nums = []
     for r in rows:
         try:
@@ -295,30 +269,18 @@ def index():
 @app.route('/api/activos', methods=['GET'])
 @login_required
 def get_activos():
-    q        = request.args.get('q','')
-    tipo     = request.args.get('tipo','')
-    estado   = request.args.get('estado','')
+    q = request.args.get('q','')
+    tipo = request.args.get('tipo','')
+    estado = request.args.get('estado','')
     edificio = request.args.get('edificio','')
-    cc       = request.args.get('centro_costo','')
-    anio     = request.args.get('anio','')
     sql = "SELECT * FROM activos WHERE 1=1"
     params = []
     if q:
-        p = f'%{q}%'
-        if 'DATABASE_URL' in os.environ and os.environ['DATABASE_URL']:
-            sql += " AND (id ILIKE ? OR marca ILIKE ? OR modelo ILIKE ? OR serie ILIKE ? OR responsable ILIKE ? OR subtipo ILIKE ? OR proveedor ILIKE ? OR sala ILIKE ? OR edificio ILIKE ? OR documento ILIKE ?)"
-        else:
-            sql += " AND (LOWER(id) LIKE LOWER(?) OR LOWER(marca) LIKE LOWER(?) OR LOWER(modelo) LIKE LOWER(?) OR LOWER(serie) LIKE LOWER(?) OR LOWER(responsable) LIKE LOWER(?) OR LOWER(subtipo) LIKE LOWER(?) OR LOWER(proveedor) LIKE LOWER(?) OR LOWER(sala) LIKE LOWER(?) OR LOWER(edificio) LIKE LOWER(?) OR LOWER(documento) LIKE LOWER(?))"
-        params += [p,p,p,p,p,p,p,p,p,p]
-    if tipo:     sql += " AND tipo=?";          params.append(tipo)
-    if estado:   sql += " AND estado=?";        params.append(estado)
-    if edificio: sql += " AND edificio=?";      params.append(edificio)
-    if cc:       sql += " AND centro_costo=?";  params.append(cc)
-    prov     = request.args.get('proveedor','')
-    if prov:     sql += " AND proveedor ILIKE ?" if 'DATABASE_URL' in os.environ and os.environ['DATABASE_URL'] else " AND LOWER(proveedor) LIKE LOWER(?)"; params.append(f'%{prov}%')
-    if anio:
-        sql += " AND (fecha_compra LIKE ? OR fecha_compra LIKE ?)"
-        params += [f'%{anio}', f'{anio}%']
+        sql += " AND (id LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR responsable LIKE ?)"
+        p = f'%{q}%'; params += [p,p,p,p,p]
+    if tipo:     sql += " AND tipo=?";     params.append(tipo)
+    if estado:   sql += " AND estado=?";   params.append(estado)
+    if edificio: sql += " AND edificio=?"; params.append(edificio)
     sql += " ORDER BY id DESC"
     return jsonify(db_fetchall(sql, params))
 
@@ -385,37 +347,22 @@ def calcular_depreciacion(a):
 @app.route('/api/activos', methods=['POST'])
 @admin_required
 def crear_activo():
-    try:
-        data = request.json
-        if not data:
-            return jsonify({'error': 'No se recibieron datos'}), 400
-        aid = next_id(data.get('fecha_compra',''))
-        vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
-        centro_costo = data.get('centro_costo','')
-        db_execute('''INSERT INTO activos
-            (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-             fecha_compra,precio,documento,vida_util,observaciones,foto)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
-            (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
-             data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
-             data.get('edificio'), data.get('sala'), data.get('responsable'),
-             data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-             vida, data.get('observaciones',''), data.get('foto','')))
-        try:
-            db_execute("UPDATE activos SET centro_costo=? WHERE id=?", (centro_costo, aid))
-        except Exception as e_cc:
-            print(f"centro_costo omitido: {e_cc}")
-        # Registrar proveedor si es nuevo
-        if centro_costo := data.get('proveedor','').strip():
-            try:
-                db_execute("INSERT INTO proveedores_activos (nombre) VALUES (?)", (centro_costo,))
-            except: pass
-        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                   (aid,'Alta','Activo registrado en el sistema',session['user']))
-        return jsonify({'id': aid, 'ok': True})
-    except Exception as e:
-        print(f"Error crear_activo: {e}")
-        return jsonify({'error': str(e)}), 500
+    data = request.json
+    aid = next_id(data.get('fecha_compra',''))
+    vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
+    centro_costo = data.get('centro_costo','')
+    db_execute('''INSERT INTO activos
+        (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
+         fecha_compra,precio,documento,vida_util,observaciones,foto)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+        (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
+         data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
+         data.get('edificio'), data.get('sala'), data.get('responsable'),
+         data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
+         vida, data.get('observaciones',''), data.get('foto','')))
+    db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+               (aid,'Alta','Activo registrado en el sistema',session['user']))
+    return jsonify({'id': aid, 'ok': True})
 
 @app.route('/api/activos/<id>', methods=['PUT'])
 @admin_required
@@ -424,7 +371,7 @@ def editar_activo(id):
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto','proveedor']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
@@ -437,6 +384,68 @@ def editar_activo(id):
         db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                    (id,'Edición',' | '.join(cambios),session['user']))
     return jsonify({'ok': True})
+
+@app.route('/admin/corregir-anios-id')
+@admin_required
+def corregir_anios_id():
+    from datetime import datetime as dt
+    resultados = []
+    rows = db_fetchall("SELECT id, fecha_compra FROM activos WHERE id LIKE 'AF-%' ORDER BY id")
+    cambios = 0
+    errores = []
+
+    for r in rows:
+        id_actual = r['id']
+        fecha = r['fecha_compra']
+        if not fecha:
+            continue
+        parts = id_actual.split('-')
+        if len(parts) != 3:
+            continue
+        correlativo = parts[2]
+
+        anio_correcto = None
+        for fmt in ['%d-%m-%Y','%Y-%m-%d','%d/%m/%Y']:
+            try:
+                anio_correcto = dt.strptime(str(fecha)[:10], fmt).year % 100
+                break
+            except: pass
+        if anio_correcto is None:
+            errores.append(f"{id_actual}: fecha '{fecha}' no se pudo parsear")
+            continue
+
+        nuevo_id = f"AF-{anio_correcto:02d}-{correlativo}"
+        if nuevo_id != id_actual:
+            try:
+                conn, mode = get_db()
+                cur = conn.cursor()
+                if mode == 'pg':
+                    cur.execute("UPDATE activos SET id=%s WHERE id=%s", (nuevo_id, id_actual))
+                    cur.execute("UPDATE movimientos SET activo_id=%s WHERE activo_id=%s", (nuevo_id, id_actual))
+                else:
+                    cur.execute("UPDATE activos SET id=? WHERE id=?", (nuevo_id, id_actual))
+                    cur.execute("UPDATE movimientos SET activo_id=? WHERE activo_id=?", (nuevo_id, id_actual))
+                conn.commit()
+                conn.close()
+                resultados.append(f"{id_actual} → {nuevo_id} (fecha: {fecha})")
+                cambios += 1
+            except Exception as e:
+                errores.append(f"{id_actual}: Error al actualizar — {e}")
+
+    html = f"<h3>✅ Corrección de años en IDs completada</h3>"
+    html += f"<p><strong>{cambios} activos corregidos</strong> de {len(rows)} revisados</p>"
+    if resultados:
+        html += "<h4>Cambios realizados:</h4><ul>"
+        for r in resultados:
+            html += f"<li>{r}</li>"
+        html += "</ul>"
+    if errores:
+        html += "<h4 style='color:red'>Errores:</h4><ul>"
+        for e in errores:
+            html += f"<li>{e}</li>"
+        html += "</ul>"
+    html += '<br><a href="/">Volver al inicio</a>'
+    return html
 
 @app.route('/api/activos/<id>', methods=['DELETE'])
 @admin_required
@@ -482,84 +491,12 @@ def subir_foto(id):
     ext = file.filename.rsplit('.',1)[-1].lower()
     if ext not in {'jpg','jpeg','png','gif','webp'}: return jsonify({'error':'Formato no permitido'}), 400
     data = file.read()
-    if len(data) > 10*1024*1024: return jsonify({'error':'Imagen muy grande (máx 10MB)'}), 400
-    try:
-        # Subir a Cloudinary
-        resultado = cloudinary.uploader.upload(
-            data,
-            folder='activos-fijos',
-            public_id=f'activo_{id}',
-            overwrite=True,
-            resource_type='image'
-        )
-        url_foto = resultado['secure_url']
-        db_execute("UPDATE activos SET foto=? WHERE id=?", (url_foto, id))
-        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                   (id,'Foto','Foto del activo actualizada',session['user']))
-        return jsonify({'ok':True,'foto':url_foto})
-    except Exception as e:
-        print(f"Error subir foto Cloudinary: {e}")
-        return jsonify({'error':str(e)}), 500
-
-@app.route('/api/activos/<id>/foto', methods=['DELETE'])
-@admin_required
-def eliminar_foto(id):
-    try:
-        # Eliminar de Cloudinary
-        try:
-            cloudinary.uploader.destroy(f'activos-fijos/activo_{id}', resource_type='image')
-        except: pass
-        db_execute("UPDATE activos SET foto='' WHERE id=?", (id,))
-        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                   (id,'Foto','Foto del activo eliminada',session['user']))
-        return jsonify({'ok':True})
-    except Exception as e:
-        return jsonify({'error':str(e)}), 500
-
-@app.route('/api/activos/<id>/documento', methods=['DELETE'])
-@admin_required
-def eliminar_documento(id):
-    tipo_doc = request.args.get('tipo','factura')
-    try:
-        try:
-            cloudinary.uploader.destroy(f'activos-fijos/documentos/activo_{id}_{tipo_doc}', resource_type='raw')
-        except: pass
-        campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
-        db_execute(f"UPDATE activos SET {campo}='' WHERE id=?", (id,))
-        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                   (id,'Documento',f'{tipo_doc.upper()} eliminada',session['user']))
-        return jsonify({'ok':True})
-    except Exception as e:
-        return jsonify({'error':str(e)}), 500
-
-@app.route('/api/activos/<id>/documento', methods=['POST'])
-@admin_required
-def subir_documento(id):
-    tipo_doc = request.args.get('tipo','factura')
-    if 'archivo' not in request.files: return jsonify({'error':'No se envió archivo'}), 400
-    file = request.files['archivo']
-    ext = file.filename.rsplit('.',1)[-1].lower()
-    if ext not in {'jpg','jpeg','png','gif','webp'}: return jsonify({'error':'Solo imágenes JPG, PNG, WEBP'}), 400
-    data = file.read()
-    if len(data) > 10*1024*1024: return jsonify({'error':'Imagen muy grande (máx 10MB)'}), 400
-    try:
-        resultado = cloudinary.uploader.upload(
-            data,
-            folder='activos-fijos/documentos',
-            public_id=f'activo_{id}_{tipo_doc}',
-            overwrite=True,
-            resource_type='image',
-            access_mode='public'
-        )
-        url_doc = resultado['secure_url']
-        campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
-        db_execute(f"UPDATE activos SET {campo}=? WHERE id=?", (url_doc, id))
-        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                   (id, 'Documento', f'{tipo_doc.upper()} subida/actualizada', session['user']))
-        return jsonify({'ok':True, 'url': url_doc, 'tipo': tipo_doc})
-    except Exception as e:
-        print(f"Error subir documento: {e}")
-        return jsonify({'error':str(e)}), 500
+    if len(data) > 5*1024*1024: return jsonify({'error':'Imagen muy grande (máx 5MB)'}), 400
+    b64 = f"data:image/{ext};base64,"+base64.b64encode(data).decode()
+    db_execute("UPDATE activos SET foto=? WHERE id=?", (b64,id))
+    db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+               (id,'Foto','Foto del activo actualizada',session['user']))
+    return jsonify({'ok':True,'foto':b64})
 
 
 @app.route('/api/debug-excel', methods=['POST'])
@@ -676,22 +613,21 @@ def importar_excel():
                 continue
             filas.append({
                 'row': row_num,
-                'tipo':      tipo,
-                'subtipo':   subtipo,
-                'marca':     leer(row_num, 3),
-                'modelo':    leer(row_num, 4),
-                'serie':     leer(row_num, 5),
-                'estado':    leer(row_num, 6) or 'Bueno',
-                'edificio':  leer(row_num, 7),
-                'sala':      leer(row_num, 8),
-                'resp':      leer(row_num, 9),
-                'cc':        leer(row_num, 10),
-                'fecha':     leer_fecha(row_num, 11),
-                'precio':    leer_num(row_num, 12),
-                'doc':       leer(row_num, 13),
-                'vida':      leer_int(row_num, 14, 7),
-                'obs':       leer(row_num, 15),
-                'proveedor': leer(row_num, 16),
+                'tipo':     tipo,
+                'subtipo':  subtipo,
+                'marca':    leer(row_num, 3),
+                'modelo':   leer(row_num, 4),
+                'serie':    leer(row_num, 5),
+                'estado':   leer(row_num, 6) or 'Bueno',
+                'edificio': leer(row_num, 7),
+                'sala':     leer(row_num, 8),
+                'resp':     leer(row_num, 9),
+                'cc':       leer(row_num, 10),
+                'fecha':    leer_fecha(row_num, 11),
+                'precio':   leer_num(row_num, 12),
+                'doc':      leer(row_num, 13),
+                'vida':     leer_int(row_num, 14, 7),
+                'obs':      leer(row_num, 15),
             })
 
         if not filas:
@@ -703,9 +639,9 @@ def importar_excel():
 
         # Obtener el correlativo actual (maximo en la BD)
         if mode2 == 'pg':
-            cur2.execute("SELECT id FROM activos WHERE id LIKE %s", ('AF-%',))
+            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
         else:
-            cur2.execute("SELECT id FROM activos WHERE id LIKE ?", ('AF-%',))
+            cur2.execute("SELECT id FROM activos WHERE id LIKE 'AF-%'")
         existing = cur2.fetchall()
 
         nums = []
@@ -748,39 +684,31 @@ def importar_excel():
                 correlativo += 1
 
                 estado = f['estado']
-                if estado not in ('Bueno', 'Regular', 'Malo', 'En Reparación'):
+                if estado not in ('Bueno', 'Regular', 'Malo'):
                     estado = 'Bueno'
 
                 vida = max(1, int(f['vida']))
 
                 if mode2 == 'pg':
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '')
+                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
                     )
-                    try:
-                        cur2.execute("UPDATE activos SET centro_costo=%s, proveedor=%s WHERE id=%s",
-                                     (str(f['cc']), str(f['proveedor']), str(aid)))
-                    except: pass
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
                         (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
                     )
                 else:
                     cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                         (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                          str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
                          str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '')
+                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
                     )
-                    try:
-                        cur2.execute("UPDATE activos SET centro_costo=?, proveedor=? WHERE id=?",
-                                     (str(f['cc']), str(f['proveedor']), str(aid)))
-                    except: pass
                     cur2.execute(
                         "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                         (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
@@ -860,10 +788,10 @@ def ficha_publica(id):
 @app.route('/api/stats')
 @login_required
 def stats():
-    total   = db_fetchone("SELECT COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos")['n']
-    buenos  = db_fetchone("SELECT COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos WHERE estado='Bueno'")['n']
-    malos   = db_fetchone("SELECT COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos WHERE estado='Malo'")['n']
-    valor   = db_fetchone("SELECT COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as s FROM activos")['s']
+    total   = db_fetchone("SELECT COUNT(*) as n FROM activos")['n']
+    buenos  = db_fetchone("SELECT COUNT(*) as n FROM activos WHERE estado='Bueno'")['n']
+    malos   = db_fetchone("SELECT COUNT(*) as n FROM activos WHERE estado='Malo'")['n']
+    valor   = db_fetchone("SELECT COALESCE(SUM(precio),0) as s FROM activos")['s']
     por_edificio = db_fetchall("SELECT edificio, COUNT(*) as n FROM activos GROUP BY edificio")
     return jsonify({'total':total,'buenos':buenos,'malos':malos,'valor':valor,'por_edificio':por_edificio})
 
@@ -871,57 +799,24 @@ def stats():
 @login_required
 def export_excel():
     import openpyxl
-    from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
-    from openpyxl.utils import get_column_letter
+    from openpyxl.styles import Font, PatternFill, Alignment
     rows = db_fetchall("SELECT * FROM activos ORDER BY id")
-    wb = openpyxl.Workbook(); ws = wb.active; ws.title="Inventario"
-
-    AZUL = '1F3864'; BLANCO = 'FFFFFF'; GRIS = 'F2F2F2'
-    def hdr_fill(): return PatternFill('solid', fgColor=AZUL)
-    def alt_fill(): return PatternFill('solid', fgColor='DEEAF1')
-    def borde():
-        s = Side(style='thin', color='BFBFBF')
-        return Border(left=s, right=s, top=s, bottom=s)
-
-    headers = [
-        ('ID Activo',       14), ('Tipo',            22), ('Subtipo',         18),
-        ('Marca',           14), ('Modelo',          16), ('N° Serie',        18),
-        ('Estado',          12), ('Edificio',        14), ('Sala',            20),
-        ('Responsable',     20), ('Centro de Costo', 26), ('Proveedor',       20),
-        ('Fecha Compra',    14), ('Precio',          14), ('N° Documento',    16),
-        ('Vida Útil (años)',14), ('Observaciones',   28),
-    ]
-    keys = ['id','tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-            'responsable','centro_costo','proveedor','fecha_compra','precio',
-            'documento','vida_util','observaciones']
-
-    for col,(h,w) in enumerate(headers,1):
-        cell = ws.cell(row=1, column=col, value=h)
-        cell.font = Font(name='Arial', bold=True, color=BLANCO, size=10)
-        cell.fill = hdr_fill()
-        cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
-        cell.border = borde()
-        ws.column_dimensions[get_column_letter(col)].width = w
-    ws.row_dimensions[1].height = 28
-
-    for ri, row in enumerate(rows, 2):
-        bg = alt_fill() if ri % 2 == 0 else PatternFill('solid', fgColor=GRIS)
-        for col, key in enumerate(keys, 1):
-            val = row.get(key, '')
-            # No exportar URLs de fotos/documentos (son largas e inútiles en Excel)
-            if key in ('foto','url_factura','url_oc'): val = '✓' if val else ''
-            cell = ws.cell(row=ri, column=col, value=val)
-            cell.font = Font(name='Arial', size=10)
-            cell.fill = bg
-            cell.border = borde()
-            cell.alignment = Alignment(vertical='center', wrap_text=False)
-        ws.row_dimensions[ri].height = 16
-
-    ws.freeze_panes = 'A2'
-    buf = io.BytesIO(); wb.save(buf); buf.seek(0)
-    from datetime import date
-    fname = f"Inventario_Activos_{date.today().strftime('%Y%m%d')}.xlsx"
-    return send_file(buf, download_name=fname, as_attachment=True,
+    wb = openpyxl.Workbook(); ws = wb.active; ws.title="Activos Fijos"
+    headers=['ID Activo','Tipo','Subtipo','Marca','Modelo','N° Serie','Estado',
+             'Edificio','Sala','Responsable','Fecha Compra','Precio','Documento','Vida Útil','Observaciones']
+    keys=['id','tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
+          'responsable','fecha_compra','precio','documento','vida_util','observaciones']
+    for col,h in enumerate(headers,1):
+        cell=ws.cell(row=1,column=col,value=h)
+        cell.font=Font(bold=True,color='FFFFFF')
+        cell.fill=PatternFill('solid',start_color='1F3864',fgColor='1F3864')
+        cell.alignment=Alignment(horizontal='center')
+        ws.column_dimensions[ws.cell(row=1,column=col).column_letter].width=18
+    for ri,row in enumerate(rows,2):
+        for col,key in enumerate(keys,1):
+            ws.cell(row=ri,column=col,value=row.get(key,''))
+    buf=io.BytesIO(); wb.save(buf); buf.seek(0)
+    return send_file(buf,download_name='activos_fijos.xlsx',as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
@@ -1000,11 +895,11 @@ def get_kpis():
     if edificio:  filtro += " AND edificio=?";      params.append(edificio)
     if cc_filtro: filtro += " AND centro_costo=?";  params.append(cc_filtro)
 
-    por_estado = db_fetchall(f"SELECT estado, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY estado", params)
-    por_tipo   = db_fetchall(f"SELECT tipo, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
-    por_edificio=db_fetchall(f"SELECT edificio, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
-    por_cc     =db_fetchall(f"SELECT centro_costo, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} AND centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
-    totales    = db_fetchone(f"SELECT COALESCE(SUM(cantidad),COUNT(*)) as total, COALESCE(SUM(precio * COALESCE(cantidad,1)),0) as valor FROM activos{filtro}", params)
+    por_estado = db_fetchall(f"SELECT estado, COUNT(*) as n FROM activos{filtro} GROUP BY estado", params)
+    por_tipo   = db_fetchall(f"SELECT tipo, COUNT(*) as n FROM activos{filtro} GROUP BY tipo ORDER BY n DESC", params)
+    por_edificio=db_fetchall(f"SELECT edificio, COUNT(*) as n FROM activos{filtro} GROUP BY edificio ORDER BY n DESC", params)
+    por_cc     =db_fetchall(f"SELECT centro_costo, COUNT(*) as n FROM activos{filtro} AND centro_costo IS NOT NULL AND centro_costo!='' GROUP BY centro_costo ORDER BY n DESC", params)
+    totales    = db_fetchone(f"SELECT COUNT(*) as total, COALESCE(SUM(precio),0) as valor FROM activos{filtro}", params)
     # Costo total mantenciones
     costo_mant = db_fetchone(
         "SELECT COALESCE(SUM(costo),0) as total FROM mantenciones")
@@ -1093,10 +988,10 @@ def kpis_subtipo():
     if edificio: filtro += " AND edificio=?";      params.append(edificio)
 
     por_subtipo = db_fetchall(
-        f"SELECT subtipo, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro} GROUP BY subtipo ORDER BY n DESC", params)
+        f"SELECT subtipo, COUNT(*) as n FROM activos{filtro} GROUP BY subtipo ORDER BY n DESC", params)
     filtro_ed = filtro + " AND edificio IS NOT NULL AND edificio != ''"
     por_subtipo_edificio = db_fetchall(
-        f"SELECT subtipo, edificio, COALESCE(SUM(cantidad),COUNT(*)) as n FROM activos{filtro_ed} GROUP BY subtipo, edificio ORDER BY subtipo, n DESC", params)
+        f"SELECT subtipo, edificio, COUNT(*) as n FROM activos{filtro_ed} GROUP BY subtipo, edificio ORDER BY subtipo, n DESC", params)
     return jsonify({
         'por_subtipo': por_subtipo,
         'por_subtipo_edificio': por_subtipo_edificio
@@ -1289,7 +1184,7 @@ def export_informe_anual():
 
     ws0.merge_cells("B4:B4")
     c = ws0["B4"]
-    c.value = f"Año {anio} — Colegio Centenario de Temuco"
+    c.value = f"Año {anio} — Colegio"
     c.font = Font(name="Arial", size=14, color=BLANCO, italic=True)
     c.fill = fill(AZUL_MED)
     c.alignment = center()
@@ -1636,72 +1531,6 @@ def export_informe_anual():
     return send_file(buf, download_name=fname, as_attachment=True,
                      mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
-
-@app.route('/admin/fusionar-proveedor')
-@admin_required
-def fusionar_proveedor():
-    viejo = request.args.get('viejo','').strip()
-    nuevo = request.args.get('nuevo','').strip()
-    if not viejo or not nuevo:
-        return '''<h3>Fusionar Proveedor</h3>
-        <p>Uso: /admin/fusionar-proveedor?viejo=NOMBRE_VIEJO&nuevo=NOMBRE_NUEVO</p>
-        <p>Ejemplo: /admin/fusionar-proveedor?viejo=ASSA+ABLOY+CHILE&nuevo=ASSA+ABLOY+CHILE+SPA</p>
-        <br><a href="/">Volver</a>'''
-    try:
-        conn, mode = get_db()
-        cur = conn.cursor()
-        if mode == 'pg':
-            cur.execute("UPDATE activos SET proveedor=%s WHERE proveedor=%s", (nuevo, viejo))
-            n = cur.rowcount
-            cur.execute("DELETE FROM proveedores_activos WHERE nombre=%s", (viejo,))
-        else:
-            cur.execute("UPDATE activos SET proveedor=? WHERE proveedor=?", (nuevo, viejo))
-            n = cur.rowcount
-            cur.execute("DELETE FROM proveedores_activos WHERE nombre=?", (viejo,))
-        conn.commit()
-        conn.close()
-        return f'✅ {n} activos actualizados de "{viejo}" → "{nuevo}"<br><br><a href="/">Volver al inicio</a>'
-    except Exception as e:
-        return f'❌ Error: {e}<br><br><a href="/">Volver</a>'
-
-@app.route('/api/proveedores', methods=['GET'])
-@login_required
-def get_proveedores():
-    rows = db_fetchall("SELECT id, nombre FROM proveedores_activos ORDER BY nombre")
-    # Enriquecer con proveedores ya registrados en activos pero no en la tabla
-    existentes = {r['nombre'] for r in rows}
-    activos_provs = db_fetchall("SELECT DISTINCT proveedor FROM activos WHERE proveedor IS NOT NULL AND proveedor != '' ORDER BY proveedor")
-    for p in activos_provs:
-        if p['proveedor'] not in existentes:
-            try:
-                db_execute("INSERT INTO proveedores_activos (nombre) VALUES (?)", (p['proveedor'],))
-            except: pass
-    rows = db_fetchall("SELECT id, nombre FROM proveedores_activos ORDER BY nombre")
-    return jsonify(rows)
-
-@app.route('/api/proveedores', methods=['POST'])
-@admin_required
-def crear_proveedor():
-    data = request.json
-    nombre = (data.get('nombre') or '').strip()
-    if not nombre:
-        return jsonify({'error': 'Nombre requerido'}), 400
-    try:
-        db_execute("INSERT INTO proveedores_activos (nombre) VALUES (?)", (nombre,))
-        return jsonify({'ok': True, 'nombre': nombre})
-    except Exception as e:
-        if 'unique' in str(e).lower() or 'duplicate' in str(e).lower():
-            return jsonify({'ok': True, 'nombre': nombre, 'existia': True})
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/verificar-pin', methods=['POST'])
-@login_required
-def verificar_pin():
-    data = request.json
-    pin = str(data.get('pin',''))
-    if pin == PIN_OPERACION:
-        return jsonify({'ok': True})
-    return jsonify({'ok': False, 'error': 'PIN incorrecto'}), 401
 
 @app.route('/api/activos/<id>/historial')
 def get_historial_publico(id):
