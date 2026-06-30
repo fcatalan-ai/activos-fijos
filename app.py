@@ -447,7 +447,57 @@ def corregir_anios_id():
     html += '<br><a href="/">Volver al inicio</a>'
     return html
 
-@app.route('/api/activos/<id>', methods=['DELETE'])
+@app.route('/admin/diagnostico-correlativos')
+@admin_required
+def diagnostico_correlativos():
+    rows = db_fetchall("SELECT id, fecha_compra FROM activos WHERE id LIKE ? ORDER BY id", ('AF-%',))
+    nums = {}
+    duplicados_correlativo = {}
+    for r in rows:
+        parts = r['id'].split('-')
+        if len(parts) != 3:
+            continue
+        try:
+            n = int(parts[2])
+        except:
+            continue
+        nums.setdefault(n, []).append(r['id'])
+
+    html = "<h3>Diagnóstico de correlativos AF-XX-XXXX</h3>"
+    html += f"<p>Total activos con formato AF-XX-XXXX: {len(rows)}</p>"
+
+    # Correlativos duplicados (mismo número, distinto año o repetido)
+    dup = {n: ids for n, ids in nums.items() if len(ids) > 1}
+    if dup:
+        html += "<h4 style='color:red'>⚠️ Correlativos duplicados:</h4><ul>"
+        for n, ids in sorted(dup.items()):
+            html += f"<li>Correlativo {n}: {', '.join(ids)}</li>"
+        html += "</ul>"
+    else:
+        html += "<p>No hay correlativos duplicados.</p>"
+
+    # Saltos en la secuencia (posibles activos perdidos)
+    todos = sorted(nums.keys())
+    if todos:
+        faltantes = [n for n in range(todos[0], todos[-1]+1) if n not in nums]
+        if faltantes:
+            html += f"<h4 style='color:orange'>Correlativos faltantes en la secuencia ({len(faltantes)}):</h4>"
+            html += "<p>" + ", ".join(str(n) for n in faltantes) + "</p>"
+            html += "<p><em>Nota: algunos pueden ser normales si nunca existieron (ej. activos eliminados intencionalmente antes). Revisa el historial de movimientos para los más recientes.</em></p>"
+        else:
+            html += "<p>No hay saltos en la secuencia de correlativos.</p>"
+
+    # Últimos movimientos de tipo Edición/Eliminación (para rastrear qué pasó)
+    movs = db_fetchall("SELECT activo_id, tipo, descripcion, usuario, fecha FROM movimientos WHERE tipo IN ('Edición','Eliminación') ORDER BY fecha DESC LIMIT 30")
+    html += "<h4>Últimos 30 movimientos de Edición/Eliminación:</h4><ul>"
+    for m in movs:
+        html += f"<li>{m['fecha']} — {m['activo_id']} — {m['tipo']} — {m['descripcion']} — {m['usuario']}</li>"
+    html += "</ul>"
+
+    html += '<br><a href="/">Volver al inicio</a>'
+    return html
+
+
 @admin_required
 def eliminar_activo(id):
     if not db_fetchone("SELECT id FROM activos WHERE id=?", (id,)):
