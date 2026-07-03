@@ -983,22 +983,26 @@ function abrirModalNuevo(){
 
 let todosProveedores = [];
 
+function normalizar(s){
+  return (s||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim();
+}
+
 function filtrarProveedorModal(q){
   const dropdown = document.getElementById('prov-dropdown');
   q = (q||'').trim();
   if(!q){ dropdown.style.display='none'; return; }
-  const ql = q.toLowerCase();
-  const coincidencias = todosProveedores.filter(p=>p.nombre.toLowerCase().includes(ql));
-  const exacto = todosProveedores.find(p=>p.nombre.toLowerCase()===ql);
-  let html = coincidencias.slice(0,8).map(p=>
+  const ql = normalizar(q);
+  const coincidencias = todosProveedores.filter(p=> normalizar(p.nombre).includes(ql));
+  const exacto = todosProveedores.find(p=> normalizar(p.nombre) === ql);
+  let html = coincidencias.slice(0,10).map(p=>
     `<div style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid #f5f5f5"
-      onmousedown="seleccionarProveedor('${p.nombre.replace(/'/g,"\'")}')"
+      onmousedown="seleccionarProveedor('${p.nombre.replace(/'/g,"&#39;")}')"
       onmouseover="this.style.background='#f0f7f4'"
       onmouseout="this.style.background=''">${p.nombre}</div>`
   ).join('');
   if(!exacto && q.length >= 2){
     html += `<div style="padding:8px 12px;cursor:pointer;font-size:13px;color:#0D4F3C;font-weight:600;background:#E2EFDA"
-      onmousedown="seleccionarProveedor('${q.replace(/'/g,"\'")}', true)"
+      onmousedown="seleccionarProveedor('${q.replace(/'/g,"&#39;")}', true)"
       onmouseover="this.style.background='#c8e6d0'"
       onmouseout="this.style.background='#E2EFDA'">✚ Agregar nuevo: "${q}"</div>`;
   }
@@ -1778,8 +1782,15 @@ cargarActivos();
 
 // Cargar proveedores para filtro y modal
 async function cargarProveedores(){
-  const r = await fetch('/api/proveedores');
-  todosProveedores = await r.json();
+  try {
+    const r = await fetch('/api/proveedores');
+    if(!r.ok){ console.warn('Error cargando proveedores:', r.status); todosProveedores=[]; return []; }
+    todosProveedores = await r.json();
+    console.log('Proveedores cargados:', todosProveedores.length, todosProveedores.slice(0,5));
+  } catch(e){
+    console.warn('Error fetch proveedores:', e);
+    todosProveedores = [];
+  }
   // Poblar filtro (limpiar y repoblar)
   const sel = document.getElementById('f-proveedor');
   const valActual = sel.value;
