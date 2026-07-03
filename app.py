@@ -278,6 +278,24 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
+@app.route('/api/proveedores', methods=['GET'])
+@login_required
+def get_proveedores():
+    rows = db_fetchall("SELECT DISTINCT proveedor FROM activos WHERE proveedor IS NOT NULL AND proveedor != '' ORDER BY proveedor")
+    nombres = [r['proveedor'] for r in rows]
+    return jsonify([{'nombre': n} for n in nombres])
+
+@app.route('/api/proveedores', methods=['POST'])
+@admin_required
+def crear_proveedor():
+    # Los proveedores se guardan directamente en la columna de activos,
+    # no hay tabla separada. Este endpoint solo confirma sin hacer nada extra.
+    data = request.json or {}
+    nombre = (data.get('nombre') or '').strip()
+    if not nombre:
+        return jsonify({'error': 'Nombre requerido'}), 400
+    return jsonify({'ok': True, 'nombre': nombre})
+
 @app.route('/api/verificar-pin', methods=['POST'])
 @login_required
 def verificar_pin_operacion():
