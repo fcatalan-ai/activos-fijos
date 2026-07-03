@@ -1275,14 +1275,16 @@ async function guardarActivo(){
         const d = await r.json();
         idsCreados.push(d.id);
       }
-      // Subir factura solo al primer activo creado
+      // Subir factura a todos los activos creados
       if(m_facturaFile && idsCreados.length > 0){
-        btnGuardar.textContent = 'Subiendo factura...';
-        try{
-          const fd = new FormData();
-          fd.append('archivo', m_facturaFile);
-          await fetch(`/api/activos/${idsCreados[0]}/documento?tipo=factura`, {method:'POST', body:fd});
-        } catch(err){ console.error('Error subiendo factura:', err); }
+        for(let i = 0; i < idsCreados.length; i++){
+          btnGuardar.textContent = `Subiendo factura ${i+1} de ${idsCreados.length}...`;
+          try{
+            const fd = new FormData();
+            fd.append('archivo', m_facturaFile);
+            await fetch(`/api/activos/${idsCreados[i]}/documento?tipo=factura`, {method:'POST', body:fd});
+          } catch(err){ console.error('Error subiendo factura a '+idsCreados[i]+':', err); }
+        }
       }
       cerrarModal('modal-activo');
       resetFacturaModal();
