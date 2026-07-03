@@ -431,6 +431,15 @@ tr.seleccionado td{background:#EEF4FF !important}
       <div id="prov-dropdown" style="display:none;position:absolute;top:100%;left:0;right:0;background:#fff;border:1px solid #ddd;border-radius:0 0 7px 7px;max-height:180px;overflow-y:auto;z-index:500;box-shadow:0 4px 12px rgba(0,0,0,0.1)"></div>
     </div>
     <div class="form-group"><label>Observaciones</label><textarea id="m-obs" rows="2" style="resize:vertical"></textarea></div>
+    <div id="m-cantidad-grupo" class="form-group" style="background:#f0f7ff;border:1px solid #bcd4f0;border-radius:8px;padding:10px 14px">
+      <label style="font-weight:600;color:#1a56a0">Cantidad de unidades a crear</label>
+      <div style="display:flex;align-items:center;gap:12px;margin-top:6px">
+        <input id="m-cantidad" type="number" min="1" max="100" value="1"
+          style="width:80px;padding:7px 10px;border:1px solid #bcd4f0;border-radius:6px;font-size:15px;font-weight:600;text-align:center"
+          oninput="actualizarLabelCantidad()">
+        <span id="m-cantidad-label" style="font-size:13px;color:#555">Se creará <strong>1 activo</strong> con un código único.</span>
+      </div>
+    </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-activo')">Cancelar</button>
       <button class="btn-save" onclick="guardarActivo()">Guardar activo</button>
@@ -966,6 +975,9 @@ function abrirModalNuevo(){
   document.getElementById('m-fecha').value='';
   document.getElementById('m-centro-costo').value='';
   resetFacturaModal();
+  document.getElementById('m-cantidad').value = 1;
+  actualizarLabelCantidad();
+  document.getElementById('m-cantidad-grupo').style.display = '';
   document.getElementById('modal-activo').classList.add('show');
 }
 
@@ -1152,6 +1164,7 @@ function _abrirModalEditar(){
   document.getElementById('m-proveedor').value=a.proveedor||'';
   document.getElementById('m-obs').value=a.observaciones||'';
   document.getElementById('m-centro-costo').value=a.centro_costo||'';
+  document.getElementById('m-cantidad-grupo').style.display = 'none';
   document.getElementById('modal-activo').classList.add('show');
 }
 
@@ -1193,12 +1206,23 @@ function resetFacturaModal(){
   document.getElementById('m-factura-label').innerHTML = '📎 Click para adjuntar imagen de la factura';
 }
 
+function actualizarLabelCantidad(){
+  const n = parseInt(document.getElementById('m-cantidad').value) || 1;
+  const lbl = document.getElementById('m-cantidad-label');
+  if(n <= 1){
+    lbl.innerHTML = 'Se creará <strong>1 activo</strong> con un código único.';
+  } else {
+    lbl.innerHTML = `Se crearán <strong>${n} activos</strong> con códigos correlativos automáticos.`;
+  }
+}
+
 async function guardarActivo(){
   // Validacion basica
   const subtipo = document.getElementById('m-subtipo').value.trim();
   if(!subtipo){ alert('Advertencia: El campo Subtipo es obligatorio.'); return; }
 
   const id = document.getElementById('m-id').value;
+  const cantidad = id ? 1 : (parseInt(document.getElementById('m-cantidad').value) || 1);
   const data = {
     tipo:         document.getElementById('m-tipo').value,
     subtipo:      subtipo,
@@ -1222,12 +1246,56 @@ async function guardarActivo(){
   const btnGuardar = document.querySelector('#modal-activo .btn-save');
   const textoOriginal = btnGuardar.textContent;
   btnGuardar.disabled = true;
-  btnGuardar.textContent = 'Guardando...';
 
   try {
     const url = id ? '/api/activos/'+id : '/api/activos';
+    const method = id ? 'PUT' : 'POST';
+
+    // Creación múltiple
+    if(!id && cantidad > 1){
+      btnGuardar.textContent = `Creando 1 de ${cantidad}...`;
+      const idsCreados = [];
+      for(let i = 0; i < cantidad; i++){
+        btnGuardar.textContent = `Creando ${i+1} de ${cantidad}...`;
+        const r = await fetch(url, {
+          method: 'POST',
+          headers: {'Content-Type':'application/json'},
+          body: JSON.stringify(data)
+        });
+        if(!r.ok){
+          let msg = 'Error en activo '+(i+1)+' ('+r.status+')';
+          try { const e = await r.json(); msg = e.error || msg; } catch(x){}
+          alert('Error al crear el activo '+(i+1)+':\n'+msg);
+          break;
+        }
+        const d = await r.json();
+        idsCreados.push(d.id);
+      }
+      // Subir factura solo al primer activo creado
+      if(m_facturaFile && idsCreados.length > 0){
+        btnGuardar.textContent = 'Subiendo factura...';
+        try{
+          const fd = new FormData();
+          fd.append('archivo', m_facturaFile);
+          await fetch(`/api/activos/${idsCreados[0]}/documento?tipo=factura`, {method:'POST', body:fd});
+        } catch(err){ console.error('Error subiendo factura:', err); }
+      }
+      cerrarModal('modal-activo');
+      resetFacturaModal();
+      cargarStats();
+      filtrar();
+      if(idsCreados.length > 0){
+        setTimeout(()=>{
+          alert(`✅ Se crearon ${idsCreados.length} activos:\n${idsCreados.join(', ')}`);
+        }, 400);
+      }
+      return;
+    }
+
+    // Creación/edición de un solo activo (flujo original)
+    btnGuardar.textContent = 'Guardando...';
     const r = await fetch(url, {
-      method: id ? 'PUT' : 'POST',
+      method,
       headers: {'Content-Type':'application/json'},
       body: JSON.stringify(data)
     });
