@@ -312,8 +312,8 @@ tr.seleccionado td{background:#EEF4FF !important}
           <div id="factura-preview" style="margin-bottom:6px"></div>
           {% if rol == 'admin' %}
           <div class="foto-upload-area" style="padding:10px" onclick="document.getElementById('factura-input').click()">
-            <input type="file" id="factura-input" accept="image/*" onchange="subirDocumento('factura')">
-            <div class="foto-upload-label" style="font-size:11px">📷 <span>Subir foto factura</span><br><small style="color:#999">JPG, PNG, WEBP</small></div>
+            <input type="file" id="factura-input" accept="image/*,application/pdf" onchange="subirDocumento('factura')">
+            <div class="foto-upload-label" style="font-size:11px">📎 <span>Subir factura</span><br><small style="color:#999">JPG, PNG, WEBP, PDF</small></div>
           </div>
           {% endif %}
         </div>
@@ -322,8 +322,8 @@ tr.seleccionado td{background:#EEF4FF !important}
           <div id="oc-preview" style="margin-bottom:6px"></div>
           {% if rol == 'admin' %}
           <div class="foto-upload-area" style="padding:10px" onclick="document.getElementById('oc-input').click()">
-            <input type="file" id="oc-input" accept="image/*" onchange="subirDocumento('oc')">
-            <div class="foto-upload-label" style="font-size:11px">📷 <span>Subir foto OC</span><br><small style="color:#999">JPG, PNG, WEBP</small></div>
+            <input type="file" id="oc-input" accept="image/*,application/pdf" onchange="subirDocumento('oc')">
+            <div class="foto-upload-label" style="font-size:11px">📎 <span>Subir OC</span><br><small style="color:#999">JPG, PNG, WEBP, PDF</small></div>
           </div>
           {% endif %}
         </div>
@@ -861,8 +861,11 @@ async function subirDocumento(tipo){
       else activoActual.url_oc = d.url;
       renderDocumentos();
       status.textContent='✅ '+tipo.toUpperCase()+' subida correctamente';
+      // Limpiar el input para permitir subir el mismo archivo en otro activo
+      document.getElementById(inputId).value = '';
     } else {
       status.textContent='❌ Error: '+d.error;
+      document.getElementById(inputId).value = '';
     }
   } catch(e) {
     status.textContent='❌ Error de conexión';
@@ -871,13 +874,16 @@ async function subirDocumento(tipo){
 
 function verDocumento(url, titulo){
   if(!url) return;
-  // Lightbox simple para ver imagen en pantalla completa
+  const esPDF = url.startsWith('data:application/pdf') || url.endsWith('.pdf');
   const overlay = document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   overlay.onclick = ()=>document.body.removeChild(overlay);
+  const contenido = esPDF
+    ? `<iframe src="${url}" style="width:90vw;height:80vh;border:none;border-radius:8px" onclick="event.stopPropagation()"></iframe>`
+    : `<img src="${url}" style="max-width:100%;max-height:85vh;border-radius:8px;box-shadow:0 4px 30px rgba(0,0,0,0.5)" onclick="event.stopPropagation()">`;
   overlay.innerHTML=`
-    <div style="color:#fff;font-size:13px;font-weight:600;margin-bottom:10px;opacity:0.8">${titulo} — click para cerrar</div>
-    <img src="${url}" style="max-width:100%;max-height:85vh;border-radius:8px;box-shadow:0 4px 30px rgba(0,0,0,0.5)" onclick="event.stopPropagation()">
+    <div style="color:#fff;font-size:13px;font-weight:600;margin-bottom:10px;opacity:0.8">${titulo} — click fuera para cerrar</div>
+    ${contenido}
     <div style="margin-top:12px;display:flex;gap:10px">
       <a href="${url}" download onclick="event.stopPropagation()" style="background:#fff;color:#1F3864;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">⬇️ Descargar</a>
       <button onclick="document.body.removeChild(this.closest('div[style*=fixed]'))" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer">✕ Cerrar</button>
