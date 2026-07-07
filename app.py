@@ -334,20 +334,39 @@ def index():
 @app.route('/api/activos', methods=['GET'])
 @login_required
 def get_activos():
-    q = request.args.get('q','')
+    q = request.args.get('q','').strip()
     tipo = request.args.get('tipo','')
     estado = request.args.get('estado','')
     edificio = request.args.get('edificio','')
+    cc = request.args.get('centro_costo','')
+    anio = request.args.get('anio','')
+    proveedor = request.args.get('proveedor','')
+
     sql = "SELECT * FROM activos WHERE 1=1"
     params = []
-    if q:
-        sql += " AND (id LIKE ? OR marca LIKE ? OR modelo LIKE ? OR serie LIKE ? OR responsable LIKE ?)"
-        p = f'%{q}%'; params += [p,p,p,p,p]
-    if tipo:     sql += " AND tipo=?";     params.append(tipo)
-    if estado:   sql += " AND estado=?";   params.append(estado)
-    if edificio: sql += " AND edificio=?"; params.append(edificio)
+
+    # Filtros exactos (dropdowns)
+    if tipo:      sql += " AND tipo=?";         params.append(tipo)
+    if estado:    sql += " AND estado=?";        params.append(estado)
+    if edificio:  sql += " AND edificio=?";      params.append(edificio)
+    if cc:        sql += " AND centro_costo=?";  params.append(cc)
+    if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
+    if anio:
+        sql += " AND id LIKE ?"; params.append(f'AF-{anio[2:]}-%')
+
     sql += " ORDER BY id DESC"
-    return jsonify(db_fetchall(sql, params))
+    rows = db_fetchall(sql, params)
+
+    # Búsqueda de texto: normalizar tildes/mayúsculas en Python para mayor compatibilidad
+    if q:
+        import unicodedata
+        def norm(s):
+            return unicodedata.normalize('NFD', str(s or '').lower()).encode('ascii','ignore').decode()
+        qn = norm(q)
+        campos = ['id','subtipo','marca','modelo','serie','responsable','documento','sala','proveedor']
+        rows = [r for r in rows if any(qn in norm(r.get(c,'')) for c in campos)]
+
+    return jsonify(rows)
 
 @app.route('/api/activos/<id>', methods=['GET'])
 @login_required
