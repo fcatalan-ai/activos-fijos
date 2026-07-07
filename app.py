@@ -802,6 +802,8 @@ def importar_excel():
                 'doc':      leer(row_num, 13),
                 'vida':     leer_int(row_num, 14, 7),
                 'obs':      leer(row_num, 15),
+                'proveedor': leer(row_num, 16),
+                'cantidad': leer_int(row_num, 17, 1),
             })
 
         if not filas:
@@ -841,6 +843,8 @@ def importar_excel():
                 errores.append(f"Fila {f['row']}: Edificio vacío")
                 continue
 
+            cantidad = max(1, int(f.get('cantidad') or 1))
+
             try:
                 # Determinar año de la fecha
                 fecha = f['fecha']
@@ -854,40 +858,42 @@ def importar_excel():
                         except:
                             pass
 
-                aid = f"AF-{anio:02d}-{correlativo}"
-                correlativo += 1
-
                 estado = f['estado']
                 if estado not in ('Bueno', 'Regular', 'Malo'):
                     estado = 'Bueno'
 
                 vida = max(1, int(f['vida']))
+                proveedor = str(f.get('proveedor') or '')
 
-                if mode2 == 'pg':
-                    cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
-                        (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
-                         str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
-                         str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
-                    )
-                    cur2.execute(
-                        "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
-                        (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
-                    )
-                else:
-                    cur2.execute(
-                        "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-                        (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
-                         str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
-                         str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
-                         str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']))
-                    )
-                    cur2.execute(
-                        "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                        (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}", usu)
-                    )
-                creados += 1
+                for i in range(cantidad):
+                    aid = f"AF-{anio:02d}-{correlativo}"
+                    correlativo += 1
+
+                    if mode2 == 'pg':
+                        cur2.execute(
+                            "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo,proveedor) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
+                            (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
+                             str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
+                             str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
+                             str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']), proveedor)
+                        )
+                        cur2.execute(
+                            "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
+                            (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}" + (f" ({i+1}/{cantidad})" if cantidad > 1 else ""), usu)
+                        )
+                    else:
+                        cur2.execute(
+                            "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo,proveedor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+                            (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
+                             str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
+                             str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
+                             str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']), proveedor)
+                        )
+                        cur2.execute(
+                            "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                            (str(aid), 'Alta', f"Importado Excel — {f['subtipo']} {f['marca']} {f['modelo']}" + (f" ({i+1}/{cantidad})" if cantidad > 1 else ""), usu)
+                        )
+                    creados += 1
 
             except Exception as e:
                 errores.append(f"Fila {f['row']}: {str(e)}")
