@@ -435,15 +435,17 @@ def crear_activo():
     aid = next_id(data.get('fecha_compra',''))
     vida = data.get('vida_util') or VIDA_UTIL_SII.get(data.get('tipo','Otro'), 7)
     centro_costo = data.get('centro_costo','')
+    proveedor = data.get('proveedor','')
     db_execute('''INSERT INTO activos
         (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,
-         fecha_compra,precio,documento,vida_util,observaciones,foto)
-        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+         fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo,proveedor)
+        VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
         (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
          data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
          data.get('edificio'), data.get('sala'), data.get('responsable'),
          data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
-         vida, data.get('observaciones',''), data.get('foto','')))
+         vida, data.get('observaciones',''), data.get('foto',''),
+         centro_costo, proveedor))
     db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
                (aid,'Alta','Activo registrado en el sistema',session['user']))
     return jsonify({'id': aid, 'ok': True})
@@ -455,7 +457,8 @@ def editar_activo(id):
     old = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not old: return jsonify({'error':'No encontrado'}), 404
     campos = ['tipo','subtipo','marca','modelo','serie','estado','edificio','sala',
-              'responsable','fecha_compra','precio','documento','vida_util','observaciones','foto']
+              'responsable','fecha_compra','precio','documento','vida_util','observaciones',
+              'foto','centro_costo','proveedor']
     updates = {c: data[c] for c in campos if c in data}
     if updates:
         sets = ', '.join(f"{c}=?" for c in updates)
