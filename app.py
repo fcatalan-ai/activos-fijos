@@ -24,6 +24,7 @@ TIPOS = [
     'Equipamiento Deportivo',
     'Mobiliario',
     'Muebles y Útiles',
+    'Instalaciones Generales',
     'Otro',
 ]
 
