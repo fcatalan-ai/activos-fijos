@@ -349,6 +349,23 @@ with app.app_context():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )''')
         conn_m.commit()
+
+        # Índices para acelerar búsquedas frecuentes
+        indices = [
+            ("idx_activos_subtipo",  "activos(subtipo)"),
+            ("idx_activos_tipo",     "activos(tipo)"),
+            ("idx_activos_estado",   "activos(estado)"),
+            ("idx_activos_edificio", "activos(edificio)"),
+            ("idx_activos_resp",     "activos(responsable)"),
+            ("idx_activos_doc",      "activos(documento)"),
+            ("idx_activos_cc",       "activos(centro_costo)"),
+            ("idx_activos_prov",     "activos(proveedor)"),
+        ]
+        for idx_name, idx_cols in indices:
+            try:
+                cur_m.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {idx_cols}")
+            except: pass
+        conn_m.commit()
         conn_m.close()
     except Exception as e_m:
         print(f"Migracion mantenciones: {e_m}")
@@ -473,29 +490,48 @@ def get_activos():
     anio = request.args.get('anio','')
     proveedor = request.args.get('proveedor','')
 
-    sql = "SELECT * FROM activos WHERE 1=1"
+    # Excluir columnas con datos pesados (base64 fotos/facturas) — se traen solo en /api/activos/<id>
+    cols = "id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,centro_costo,proveedor,factor_cm_manual"
+
     params = []
 
-    # Filtros exactos (dropdowns)
-    if tipo:      sql += " AND tipo=?";         params.append(tipo)
-    if estado:    sql += " AND estado=?";        params.append(estado)
-    if edificio:  sql += " AND edificio=?";      params.append(edificio)
-    if cc:        sql += " AND centro_costo=?";  params.append(cc)
-    if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
-    if anio:
-        sql += " AND id LIKE ?"; params.append(f'AF-{anio[2:]}-%')
-
-    sql += " ORDER BY id DESC"
-    rows = db_fetchall(sql, params)
-
-    # Búsqueda de texto: normalizar tildes/mayúsculas en Python para mayor compatibilidad
+    # Si hay búsqueda de texto, primero hacemos ILIKE en SQL sobre campos indexables
+    # (sin tildes — luego afinamos en Python para tildes/acentos)
     if q:
         import unicodedata
         def norm(s):
             return unicodedata.normalize('NFD', str(s or '').lower()).encode('ascii','ignore').decode()
         qn = norm(q)
+        # Buscar en SQL (rápido, sin tildes)
+        like = f'%{q}%'
+        like_norm = f'%{qn}%'
+        sql = f"""SELECT {cols} FROM activos WHERE 1=1
+            AND (id ILIKE ? OR subtipo ILIKE ? OR marca ILIKE ? OR modelo ILIKE ?
+                 OR serie ILIKE ? OR responsable ILIKE ? OR documento ILIKE ?
+                 OR sala ILIKE ? OR proveedor ILIKE ?)"""
+        params = [like]*9
+        # Filtros adicionales
+        if tipo:      sql += " AND tipo=?";         params.append(tipo)
+        if estado:    sql += " AND estado=?";        params.append(estado)
+        if edificio:  sql += " AND edificio=?";      params.append(edificio)
+        if cc:        sql += " AND centro_costo=?";  params.append(cc)
+        if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
+        if anio:      sql += " AND id LIKE ?";       params.append(f'AF-{anio[2:]}-%')
+        sql += " ORDER BY id DESC"
+        rows = db_fetchall(sql, params)
+        # Refinar en Python para tildes/acentos (sobre el subconjunto ya filtrado)
         campos = ['id','subtipo','marca','modelo','serie','responsable','documento','sala','proveedor']
         rows = [r for r in rows if any(qn in norm(r.get(c,'')) for c in campos)]
+    else:
+        sql = f"SELECT {cols} FROM activos WHERE 1=1"
+        if tipo:      sql += " AND tipo=?";         params.append(tipo)
+        if estado:    sql += " AND estado=?";        params.append(estado)
+        if edificio:  sql += " AND edificio=?";      params.append(edificio)
+        if cc:        sql += " AND centro_costo=?";  params.append(cc)
+        if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
+        if anio:      sql += " AND id LIKE ?";       params.append(f'AF-{anio[2:]}-%')
+        sql += " ORDER BY id DESC"
+        rows = db_fetchall(sql, params)
 
     return jsonify(rows)
 
