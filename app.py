@@ -350,6 +350,19 @@ with app.app_context():
             )''')
         conn_m.commit()
 
+        # Migración: convertir precio de REAL a BIGINT para preservar exactitud en pesos CLP
+        try:
+            if mode_m == 'pg':
+                cur_m.execute("""
+                    ALTER TABLE activos
+                    ALTER COLUMN precio TYPE BIGINT
+                    USING ROUND(precio)::BIGINT
+                """)
+                conn_m.commit()
+        except Exception as e_precio:
+            # Ya es BIGINT u otro error: ignorar
+            conn_m.rollback()
+
         # Índices para acelerar búsquedas frecuentes
         indices = [
             ("idx_activos_subtipo",  "activos(subtipo)"),
@@ -553,7 +566,7 @@ def calcular_depreciacion(a):
         fecha = _parsear_fecha_cm(fecha_str)
         if not fecha: return None
 
-        precio_original = float(a['precio'])
+        precio_original = int(round(float(a['precio'])))
         if precio_original <= 0: return None
 
         tipo = a.get('tipo','Otro')
@@ -575,7 +588,7 @@ def calcular_depreciacion(a):
         # ── TERRENO: solo CM, nunca se deprecia ──────────────────────────────
         if tipo in TIPOS_SIN_DEPRECIACION:
             return {
-                'precio_original':    round(precio_original),
+                'precio_original':    precio_original,  # exacto
                 'factor_cm':          factor_cm,
                 'fuente_cm':          fuente_cm,
                 'desglose_cm':        desglose_cm,
@@ -618,7 +631,7 @@ def calcular_depreciacion(a):
                 fecha_termino = datetime(fecha.year + int(vida_util_anos), fecha.month, fecha.day)
             anos_rest = max(0, (fecha_termino - hoy).days / 365.25)
             return {
-                'precio_original':    round(precio_original),
+                'precio_original':    precio_original,  # exacto
                 'factor_cm':          factor_cm,
                 'fuente_cm':          fuente_cm,
                 'desglose_cm':        desglose_cm,
@@ -655,7 +668,7 @@ def calcular_depreciacion(a):
         anos_rest      = max(0, (fecha_termino - hoy).days / 365.25)
 
         return {
-            'precio_original':    round(precio_original),
+            'precio_original':    precio_original,  # exacto
             'factor_cm':          factor_cm,
             'fuente_cm':          fuente_cm,
             'desglose_cm':        desglose_cm,
@@ -694,7 +707,7 @@ def crear_activo():
         (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
          data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
          data.get('edificio'), data.get('sala'), data.get('responsable'),
-         data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
+         data.get('fecha_compra'), int(round(float(data.get('precio') or 0))), data.get('documento'),
          vida, data.get('observaciones',''), data.get('foto',''),
          centro_costo, proveedor))
     db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
@@ -1147,7 +1160,7 @@ def importar_excel():
                             "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo,proveedor) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                             (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                              str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
-                             str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
+                             str(f['sala']), str(f['resp']), str(fecha), int(round(float(f['precio'] or 0))),
                              str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']), proveedor)
                         )
                         cur2.execute(
@@ -1159,7 +1172,7 @@ def importar_excel():
                             "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo,proveedor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                             (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                              str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
-                             str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
+                             str(f['sala']), str(f['resp']), str(fecha), int(round(float(f['precio'] or 0))),
                              str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']), proveedor)
                         )
                         cur2.execute(
