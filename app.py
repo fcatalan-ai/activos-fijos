@@ -25,8 +25,16 @@ TIPOS = [
     'Mobiliario',
     'Muebles y Útiles',
     'Instalaciones Generales',
+    'Terreno',
+    'Bien Raíz',
     'Otro',
 ]
+
+# Tipos que NO se deprecian (solo tienen corrección monetaria)
+TIPOS_SIN_DEPRECIACION = {'Terreno'}
+
+# Tipos cuya vida útil se ingresa en MESES (no años)
+TIPOS_VIDA_MESES = {'Bien Raíz'}
 
 # ─────────────────────────────────────────────────────────────────────────────
 # CORRECCIÓN MONETARIA SII — Tablas oficiales por año de ejercicio
@@ -111,6 +119,13 @@ VIDA_UTIL_SII = {
     'Equipamiento Deportivo':   5,
     'Mobiliario':               7,
     'Muebles y Útiles':         7,
+    'Instalaciones Generales':  10,
+    # Terreno: no se deprecia, vida útil indefinida (0 = no aplica)
+    'Terreno':                  0,
+    # Bien Raíz: vida útil en MESES (remanente al momento del registro)
+    # SII permite hasta 80 años para construcciones nuevas;
+    # para usadas se registra el remanente real. Default: 480 meses (40 años)
+    'Bien Raíz':                480,
     'Otro':                     7,
 }
 
@@ -486,37 +501,102 @@ def calcular_depreciacion(a):
         if precio_original <= 0: return None
 
         tipo = a.get('tipo','Otro')
-        vida_util = int(a.get('vida_util') or VIDA_UTIL_SII.get(tipo, 7))
-        tasa_anual = 1.0 / vida_util
-        hoy = datetime.now()
+        hoy  = datetime.now()
 
-        # Corrección Monetaria con valores oficiales SII
+        # Corrección Monetaria (aplica a todos los tipos)
         factor_cm, fuente_cm = calcular_factor_cm(fecha_str, a.get('factor_cm_manual'))
-
-        # Desglose anual para mostrar en la ficha
         desglose_cm = []
         anio_adq = fecha.year
         mes_adq  = fecha.month
         for ejercicio in sorted(CM_SII.keys()):
             if ejercicio < anio_adq: continue
             tabla = CM_SII[ejercicio]
-            pct = tabla.get(mes_adq if ejercicio == anio_adq else 0, 0.0)
-            pct = max(0.0, pct)
+            pct = max(0.0, tabla.get(mes_adq if ejercicio == anio_adq else 0, 0.0))
             desglose_cm.append({'ejercicio': ejercicio, 'pct': round(pct, 1)})
 
         valor_corregido = round(precio_original * factor_cm)
-        valor_residual  = round(valor_corregido * 0.10)  # 10% sobre valor corregido
 
-        anos_transcurridos = (hoy - fecha).days / 365.25
-        depreciacion_acum = min(
+        # ── TERRENO: solo CM, nunca se deprecia ──────────────────────────────
+        if tipo in TIPOS_SIN_DEPRECIACION:
+            return {
+                'precio_original':    round(precio_original),
+                'factor_cm':          factor_cm,
+                'fuente_cm':          fuente_cm,
+                'desglose_cm':        desglose_cm,
+                'anio_adq':           anio_adq,
+                'mes_adq':            mes_adq,
+                'valor_corregido':    valor_corregido,
+                'valor_libro':        valor_corregido,   # = valor corregido siempre
+                'valor_residual':     valor_corregido,   # 100% residual
+                'depreciacion_acum':  0,
+                'porcentaje_dep':     0,
+                'anos_transcurridos': round((hoy - fecha).days / 365.25, 1),
+                'anos_restantes':     None,
+                'vida_util':          None,
+                'tasa_anual':         0,
+                'fecha_termino':      None,
+                'estado_dep':         'No deprecia',
+                'es_terreno':         True,
+            }
+
+        # ── BIEN RAÍZ: vida útil en MESES ────────────────────────────────────
+        if tipo in TIPOS_VIDA_MESES:
+            # vida_util se guarda en meses para Bien Raíz
+            meses_remanente = int(a.get('vida_util') or VIDA_UTIL_SII.get(tipo, 480))
+            vida_util_anos  = meses_remanente / 12
+            tasa_anual      = 1.0 / vida_util_anos if vida_util_anos > 0 else 0
+            valor_residual  = round(valor_corregido * 0.10)
+            anos_transcurr  = (hoy - fecha).days / 365.25
+            dep_acum = min(
+                valor_corregido - valor_residual,
+                (valor_corregido - valor_residual) * tasa_anual * anos_transcurr
+            )
+            valor_libro    = max(valor_residual, valor_corregido - dep_acum)
+            pct_dep        = min(100, dep_acum / (valor_corregido - valor_residual) * 100) if valor_corregido > valor_residual else 100
+            try:
+                fecha_termino = datetime(
+                    fecha.year + int(meses_remanente // 12),
+                    fecha.month + int(meses_remanente % 12), 1
+                )
+            except:
+                fecha_termino = datetime(fecha.year + int(vida_util_anos), fecha.month, fecha.day)
+            anos_rest = max(0, (fecha_termino - hoy).days / 365.25)
+            return {
+                'precio_original':    round(precio_original),
+                'factor_cm':          factor_cm,
+                'fuente_cm':          fuente_cm,
+                'desglose_cm':        desglose_cm,
+                'anio_adq':           anio_adq,
+                'mes_adq':            mes_adq,
+                'valor_corregido':    valor_corregido,
+                'valor_libro':        round(valor_libro),
+                'valor_residual':     valor_residual,
+                'depreciacion_acum':  round(dep_acum),
+                'porcentaje_dep':     round(pct_dep, 1),
+                'anos_transcurridos': round(anos_transcurr, 1),
+                'anos_restantes':     round(anos_rest, 1),
+                'vida_util':          meses_remanente,
+                'vida_util_meses':    True,
+                'tasa_anual':         round(tasa_anual * 100, 2),
+                'fecha_termino':      fecha_termino.strftime('%d-%m-%Y'),
+                'estado_dep':         'Depreciado' if pct_dep >= 100 else
+                                      'Crítico'    if pct_dep >= 80  else
+                                      'Avanzado'   if pct_dep >= 50  else 'Normal',
+            }
+
+        # ── RESTO DE TIPOS: vida útil en AÑOS (comportamiento estándar) ───────
+        vida_util  = int(a.get('vida_util') or VIDA_UTIL_SII.get(tipo, 7))
+        tasa_anual = 1.0 / vida_util if vida_util > 0 else 0
+        valor_residual  = round(valor_corregido * 0.10)
+        anos_transcurr  = (hoy - fecha).days / 365.25
+        dep_acum = min(
             valor_corregido - valor_residual,
-            (valor_corregido - valor_residual) * tasa_anual * anos_transcurridos
+            (valor_corregido - valor_residual) * tasa_anual * anos_transcurr
         )
-        valor_libro   = max(valor_residual, valor_corregido - depreciacion_acum)
-        porcentaje_dep = min(100, depreciacion_acum / (valor_corregido - valor_residual) * 100) if valor_corregido > valor_residual else 100
-
+        valor_libro  = max(valor_residual, valor_corregido - dep_acum)
+        pct_dep      = min(100, dep_acum / (valor_corregido - valor_residual) * 100) if valor_corregido > valor_residual else 100
         fecha_termino  = datetime(fecha.year + vida_util, fecha.month, fecha.day)
-        anos_restantes = max(0, (fecha_termino - hoy).days / 365.25)
+        anos_rest      = max(0, (fecha_termino - hoy).days / 365.25)
 
         return {
             'precio_original':    round(precio_original),
@@ -525,19 +605,20 @@ def calcular_depreciacion(a):
             'desglose_cm':        desglose_cm,
             'anio_adq':           anio_adq,
             'mes_adq':            mes_adq,
-            'valor_corregido':    round(valor_corregido),
+            'valor_corregido':    valor_corregido,
             'valor_libro':        round(valor_libro),
-            'valor_residual':     round(valor_residual),
-            'depreciacion_acum':  round(depreciacion_acum),
-            'porcentaje_dep':     round(porcentaje_dep, 1),
-            'anos_transcurridos': round(anos_transcurridos, 1),
-            'anos_restantes':     round(anos_restantes, 1),
+            'valor_residual':     valor_residual,
+            'depreciacion_acum':  round(dep_acum),
+            'porcentaje_dep':     round(pct_dep, 1),
+            'anos_transcurridos': round(anos_transcurr, 1),
+            'anos_restantes':     round(anos_rest, 1),
             'vida_util':          vida_util,
+            'vida_util_meses':    False,
             'tasa_anual':         round(tasa_anual * 100, 2),
             'fecha_termino':      fecha_termino.strftime('%d-%m-%Y'),
-            'estado_dep':         'Depreciado' if porcentaje_dep >= 100 else
-                                  'Crítico'    if porcentaje_dep >= 80  else
-                                  'Avanzado'   if porcentaje_dep >= 50  else 'Normal',
+            'estado_dep':         'Depreciado' if pct_dep >= 100 else
+                                  'Crítico'    if pct_dep >= 80  else
+                                  'Avanzado'   if pct_dep >= 50  else 'Normal',
         }
     except Exception as e:
         return None
