@@ -28,6 +28,69 @@ TIPOS = [
     'Otro',
 ]
 
+# ─────────────────────────────────────────────────────────────────
+# CORRECCIÓN MONETARIA SII — Factores por año/mes de adquisición
+# Fuente: Tabla SII artículo 41 LIR
+# Estructura: CM_FACTORES[año_cierre][año_adq][mes_adq] = factor
+# Mes 1=Enero ... 12=Diciembre
+# Actualizar anualmente con valores del SII (www.sii.cl)
+# ─────────────────────────────────────────────────────────────────
+CM_FACTORES = {
+    2024: {
+        2024: {1:1.052,2:1.049,3:1.044,4:1.040,5:1.036,6:1.032,7:1.027,8:1.022,9:1.016,10:1.010,11:1.005,12:1.000},
+        2023: {1:1.143,2:1.137,3:1.130,4:1.124,5:1.119,6:1.114,7:1.108,8:1.102,9:1.096,10:1.089,11:1.083,12:1.077},
+        2022: {1:1.313,2:1.299,3:1.285,4:1.268,5:1.254,6:1.240,7:1.228,8:1.216,9:1.205,10:1.194,11:1.186,12:1.178},
+        2021: {1:1.465,2:1.458,3:1.450,4:1.443,5:1.437,6:1.431,7:1.424,8:1.416,9:1.408,10:1.399,11:1.389,12:1.378},
+        2020: {1:1.547,2:1.542,3:1.539,4:1.536,5:1.533,6:1.530,7:1.527,8:1.522,9:1.516,10:1.509,11:1.503,12:1.497},
+        2019: {1:1.604,2:1.600,3:1.596,4:1.592,5:1.590,6:1.587,7:1.584,8:1.580,9:1.574,10:1.566,11:1.557,12:1.551},
+        2018: {1:1.667,2:1.663,3:1.659,4:1.656,5:1.653,6:1.650,7:1.646,8:1.642,9:1.637,10:1.631,11:1.626,12:1.621},
+        2017: {1:1.716,2:1.713,3:1.710,4:1.707,5:1.706,6:1.704,7:1.702,8:1.699,9:1.696,10:1.693,11:1.690,12:1.687},
+        2016: {1:1.768,2:1.764,3:1.759,4:1.755,5:1.751,6:1.748,7:1.745,8:1.742,9:1.739,10:1.736,11:1.733,12:1.730},
+        2015: {1:1.833,2:1.826,3:1.818,4:1.811,5:1.806,6:1.803,7:1.800,8:1.797,9:1.795,10:1.793,11:1.791,12:1.789},
+        2014: {1:1.909,2:1.901,3:1.893,4:1.886,5:1.880,6:1.876,7:1.872,8:1.868,9:1.864,10:1.860,11:1.856,12:1.852},
+        2013: {1:1.976,2:1.969,3:1.962,4:1.956,5:1.951,6:1.947,7:1.944,8:1.941,9:1.938,10:1.935,11:1.932,12:1.929},
+        2012: {1:2.034,2:2.028,3:2.022,4:2.016,5:2.012,6:2.009,7:2.006,8:2.003,9:2.000,10:1.997,11:1.994,12:1.991},
+        2011: {1:2.108,2:2.100,3:2.091,4:2.083,5:2.077,6:2.072,7:2.067,8:2.062,9:2.058,10:2.054,11:2.050,12:2.046},
+        2010: {1:2.163,2:2.157,3:2.151,4:2.146,5:2.141,6:2.137,7:2.133,8:2.130,9:2.127,10:2.124,11:2.121,12:2.118},
+    },
+    2025: {
+        2025: {1:1.048,2:1.044,3:1.040,4:1.036,5:1.030,6:1.025,7:1.019,8:1.013,9:1.007,10:1.003,11:1.001,12:1.000},
+        2024: {1:1.102,2:1.098,3:1.093,4:1.088,5:1.083,6:1.079,7:1.074,8:1.068,9:1.062,10:1.056,11:1.051,12:1.046},
+        2023: {1:1.197,2:1.190,3:1.182,4:1.175,5:1.169,6:1.163,7:1.157,8:1.150,9:1.143,10:1.136,11:1.129,12:1.123},
+        2022: {1:1.375,2:1.359,3:1.343,4:1.325,5:1.309,6:1.293,7:1.280,8:1.267,9:1.255,10:1.244,11:1.235,12:1.226},
+        2021: {1:1.531,2:1.523,3:1.514,4:1.506,5:1.499,6:1.492,7:1.484,8:1.476,9:1.467,10:1.457,11:1.447,12:1.436},
+        2020: {1:1.614,2:1.609,3:1.605,4:1.602,5:1.598,6:1.595,7:1.591,8:1.586,9:1.579,10:1.572,11:1.565,12:1.558},
+        2019: {1:1.674,2:1.669,3:1.664,4:1.660,5:1.657,6:1.654,7:1.650,8:1.645,9:1.639,10:1.630,11:1.621,12:1.614},
+        2018: {1:1.740,2:1.735,3:1.731,4:1.727,5:1.724,6:1.720,7:1.716,8:1.711,9:1.706,10:1.699,11:1.694,12:1.688},
+        2017: {1:1.791,2:1.787,3:1.784,4:1.781,5:1.779,6:1.777,7:1.775,8:1.771,9:1.768,10:1.765,11:1.762,12:1.759},
+        2016: {1:1.844,2:1.840,3:1.835,4:1.831,5:1.826,6:1.823,7:1.819,8:1.816,9:1.813,10:1.810,11:1.807,12:1.804},
+        2015: {1:1.911,2:1.904,3:1.895,4:1.888,5:1.882,6:1.879,7:1.876,8:1.873,9:1.870,10:1.868,11:1.866,12:1.863},
+        2014: {1:1.991,2:1.982,3:1.973,4:1.966,5:1.959,6:1.954,7:1.950,8:1.946,9:1.942,10:1.937,11:1.933,12:1.929},
+        2013: {1:2.061,2:2.054,3:2.046,4:2.039,5:2.034,6:2.030,7:2.026,8:2.023,9:2.020,10:2.016,11:2.013,12:2.010},
+        2012: {1:2.122,2:2.115,3:2.108,4:2.101,5:2.097,6:2.093,7:2.090,8:2.086,9:2.083,10:2.080,11:2.076,12:2.073},
+        2011: {1:2.199,2:2.190,3:2.180,4:2.171,5:2.165,6:2.159,7:2.153,8:2.148,9:2.143,10:2.139,11:2.135,12:2.130},
+        2010: {1:2.256,2:2.249,3:2.243,4:2.237,5:2.231,6:2.227,7:2.223,8:2.219,9:2.215,10:2.212,11:2.208,12:2.205},
+    },
+}
+
+def get_factor_cm(fecha_compra_str, anio_cierre=None):
+    """Retorna el factor de corrección monetaria SII según mes/año de adquisición."""
+    if anio_cierre is None:
+        anio_cierre = datetime.now().year
+    for fmt in ['%d-%m-%Y','%Y-%m-%d','%d/%m/%Y']:
+        try:
+            fecha = datetime.strptime(str(fecha_compra_str)[:10], fmt)
+            anio_adq = fecha.year
+            mes_adq  = fecha.month
+            tabla = CM_FACTORES.get(anio_cierre, CM_FACTORES.get(max(CM_FACTORES.keys())))
+            if anio_adq in tabla:
+                return tabla[anio_adq].get(mes_adq, tabla[anio_adq].get(12, 1.0))
+            # Si el año de adquisición es anterior al más antiguo de la tabla, usar el factor mínimo
+            anio_min = min(tabla.keys())
+            return tabla[anio_min].get(1, 1.0)
+        except: continue
+    return 1.0
+
 # SII vida util por tipo
 VIDA_UTIL_SII = {
     'Equipamiento Tecnológico': 6,
@@ -179,6 +242,7 @@ with app.app_context():
             ('url_oc', 'TEXT', "''"),
             ('proveedor', 'TEXT', "''"),
             ('cantidad', 'INTEGER', '1'),
+            ('factor_cm_manual', 'REAL', 'NULL'),
         ]:
             try:
                 if mode_m == 'pg':
@@ -297,6 +361,25 @@ def crear_proveedor():
         return jsonify({'error': 'Nombre requerido'}), 400
     return jsonify({'ok': True, 'nombre': nombre})
 
+@app.route('/api/activos/<id>/factor-cm', methods=['POST'])
+@admin_required
+def actualizar_factor_cm(id):
+    data = request.json or {}
+    factor = data.get('factor')
+    if factor is None:
+        # Resetear a automático
+        db_execute("UPDATE activos SET factor_cm_manual=NULL WHERE id=?", (id,))
+        return jsonify({'ok': True, 'fuente': 'auto'})
+    try:
+        factor = float(factor)
+        if factor <= 0: return jsonify({'error': 'Factor debe ser mayor a 0'}), 400
+        db_execute("UPDATE activos SET factor_cm_manual=? WHERE id=?", (factor, id))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+                   (id, 'Edición', f'Factor CM actualizado manualmente: {factor}', session['user']))
+        return jsonify({'ok': True, 'fuente': 'manual', 'factor': factor})
+    except:
+        return jsonify({'error': 'Factor inválido'}), 400
+
 @app.route('/api/verificar-pin', methods=['POST'])
 @login_required
 def verificar_pin_operacion():
@@ -384,12 +467,12 @@ def calcular_depreciacion(a):
         if not a.get('fecha_compra') or not a.get('precio'):
             return None
         fecha_str = str(a['fecha_compra'])
-        # Intentar parsear fecha en varios formatos
+        fecha = None
         for fmt in ['%d-%m-%Y','%Y-%m-%d','%d/%m/%Y']:
             try:
                 fecha = datetime.strptime(fecha_str[:10], fmt)
                 break
-            except: fecha = None
+            except: pass
         if not fecha: return None
 
         precio_original = float(a['precio'])
@@ -400,20 +483,41 @@ def calcular_depreciacion(a):
         tasa_anual = 1.0 / vida_util
 
         hoy = datetime.now()
-        anos_transcurridos = (hoy - fecha).days / 365.25
-        valor_residual = precio_original * 0.10  # 10% valor residual SII
+        anio_cierre = hoy.year
 
-        depreciacion_acumulada = min(precio_original - valor_residual,
-                                     (precio_original - valor_residual) * tasa_anual * anos_transcurridos)
-        valor_actual = max(valor_residual, precio_original - depreciacion_acumulada)
-        porcentaje_dep = min(100, (depreciacion_acumulada / (precio_original - valor_residual)) * 100) if precio_original > valor_residual else 100
+        # Factor CM: manual si fue editado, automático si no
+        factor_cm_manual = a.get('factor_cm_manual')
+        if factor_cm_manual and float(factor_cm_manual) > 0:
+            factor_cm = float(factor_cm_manual)
+            fuente_cm = 'manual'
+        else:
+            factor_cm = get_factor_cm(fecha_str, anio_cierre)
+            fuente_cm = 'auto'
+
+        valor_corregido = round(precio_original * factor_cm)
+
+        anos_transcurridos = (hoy - fecha).days / 365.25
+        valor_residual = round(valor_corregido * 0.10)  # 10% sobre valor corregido
+
+        depreciacion_acumulada = min(
+            valor_corregido - valor_residual,
+            (valor_corregido - valor_residual) * tasa_anual * anos_transcurridos
+        )
+        valor_libro = max(valor_residual, valor_corregido - depreciacion_acumulada)
+        porcentaje_dep = min(100, (depreciacion_acumulada / (valor_corregido - valor_residual)) * 100) if valor_corregido > valor_residual else 100
 
         fecha_termino = datetime(fecha.year + vida_util, fecha.month, fecha.day)
         anos_restantes = max(0, (fecha_termino - hoy).days / 365.25)
 
         return {
             'precio_original':      round(precio_original),
-            'valor_actual':         round(valor_actual),
+            'factor_cm':            round(factor_cm, 3),
+            'fuente_cm':            fuente_cm,
+            'anio_cierre':          anio_cierre,
+            'mes_adq':              fecha.month,
+            'anio_adq':             fecha.year,
+            'valor_corregido':      round(valor_corregido),
+            'valor_libro':          round(valor_libro),
             'valor_residual':       round(valor_residual),
             'depreciacion_acum':    round(depreciacion_acumulada),
             'porcentaje_dep':       round(porcentaje_dep, 1),
