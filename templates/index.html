@@ -1423,8 +1423,12 @@ function renderDepreciacion(dep){
   if(!dep){ el.innerHTML='<div class="loading">Sin fecha de compra o precio registrado</div>'; return; }
   const color = dep.estado_dep==='Depreciado'?'#791F1F':dep.estado_dep==='Crítico'?'#C00':dep.estado_dep==='Avanzado'?'#ED7D31':'#27500A';
   const bgBar = dep.estado_dep==='Depreciado'?'#FCEBEB':dep.estado_dep==='Crítico'?'#FCEBEB':dep.estado_dep==='Avanzado'?'#FCE4D6':'#E2EFDA';
+  const esManual = dep.fuente_cm === 'manual';
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const mesNombre = meses[(dep.mes_adq||1)-1];
+
   el.innerHTML = `
-    <div style="background:${bgBar};border-radius:8px;padding:12px;margin-bottom:12px;text-align:center">
+    <div style="background:${bgBar};border-radius:8px;padding:12px;margin-bottom:10px;text-align:center">
       <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em">Estado depreciación</div>
       <div style="font-size:20px;font-weight:700;color:${color};margin:4px 0">${dep.estado_dep}</div>
       <div style="font-size:13px;color:#555">${dep.porcentaje_dep}% depreciado</div>
@@ -1432,24 +1436,62 @@ function renderDepreciacion(dep){
         <div style="background:${color};width:${Math.min(100,dep.porcentaje_dep)}%;height:100%;border-radius:10px;transition:width 0.5s"></div>
       </div>
     </div>
+
+    <!-- Corrección Monetaria -->
+    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:8px">
+        📊 Corrección Monetaria SII — Cierre ${dep.anio_cierre}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="text-align:center">
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase">Precio original</div>
+          <div style="font-size:14px;font-weight:700;color:#1F3864">$${dep.precio_original.toLocaleString('es-CL')}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase">Valor corregido</div>
+          <div style="font-size:14px;font-weight:700;color:#1e40af">$${dep.valor_corregido.toLocaleString('es-CL')}</div>
+        </div>
+      </div>
+      <div style="background:#fff;border-radius:6px;padding:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div>
+          <div style="font-size:10px;color:#64748b">Factor CM (${mesNombre} ${dep.anio_adq})</div>
+          <div style="font-size:13px;font-weight:700;color:${esManual?'#b45309':'#1e40af'}">
+            ${dep.factor_cm} ${esManual?'<span style="font-size:10px;color:#b45309;font-weight:400">(editado)</span>':'<span style="font-size:10px;color:#64748b;font-weight:400">(SII auto)</span>'}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="input-factor-cm" step="0.001" min="0.1" max="10"
+            value="${dep.factor_cm}"
+            style="width:80px;padding:4px 6px;border:1px solid #bcd4f0;border-radius:6px;font-size:13px;text-align:center">
+          <button onclick="guardarFactorCM()" style="background:#1e40af;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">Guardar</button>
+          ${esManual?`<button onclick="resetFactorCM()" style="background:#fee2e2;color:#991b1b;border:none;padding:5px 8px;border-radius:6px;font-size:11px;cursor:pointer" title="Restablecer automático">↺ Auto</button>`:''}
+        </div>
+      </div>
+    </div>
+
+    <!-- Valores -->
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
-        <div style="font-size:10px;color:#999;text-transform:uppercase">Precio original</div>
-        <div style="font-size:15px;font-weight:700;color:#1F3864">$${dep.precio_original.toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Valor libro</div>
+        <div style="font-size:15px;font-weight:700;color:${color}">$${dep.valor_libro.toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999">(sobre valor corregido)</div>
       </div>
       <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
-        <div style="font-size:10px;color:#999;text-transform:uppercase">Valor actual</div>
-        <div style="font-size:15px;font-weight:700;color:${color}">$${dep.valor_actual.toLocaleString('es-CL')}</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
-        <div style="font-size:10px;color:#999;text-transform:uppercase">Depreciado</div>
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Depreciado acum.</div>
         <div style="font-size:15px;font-weight:700;color:#791F1F">$${dep.depreciacion_acum.toLocaleString('es-CL')}</div>
       </div>
       <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
         <div style="font-size:10px;color:#999;text-transform:uppercase">Valor residual</div>
         <div style="font-size:14px;font-weight:700;color:#888">$${dep.valor_residual.toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999">(10% valor corregido)</div>
+      </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Corrección aplicada</div>
+        <div style="font-size:14px;font-weight:700;color:#1e40af">+$${(dep.valor_corregido - dep.precio_original).toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999">× ${dep.factor_cm}</div>
       </div>
     </div>
+
     <div style="font-size:12px;color:#666;background:#f8fafc;border-radius:8px;padding:10px;border:1px solid #e5e8ed">
       <div style="margin-bottom:4px">📅 <strong>Vida útil SII:</strong> ${dep.vida_util} años (${dep.tasa_anual}% anual)</div>
       <div style="margin-bottom:4px">⏱️ <strong>Años transcurridos:</strong> ${dep.anos_transcurridos} años</div>
@@ -1457,6 +1499,42 @@ function renderDepreciacion(dep){
       <div>📆 <strong>Término vida útil:</strong> ${dep.fecha_termino}</div>
     </div>
   `;
+}
+
+async function guardarFactorCM(){
+  const factor = parseFloat(document.getElementById('input-factor-cm').value);
+  if(!factor || factor <= 0){ alert('Ingresa un factor válido mayor a 0'); return; }
+  const r = await fetch(`/api/activos/${activoActual.id}/factor-cm`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({factor})
+  });
+  const d = await r.json();
+  if(d.ok){
+    // Recargar la ficha para actualizar los cálculos
+    const ficha = await fetch(`/api/activos/${activoActual.id}`);
+    const data = await ficha.json();
+    activoActual = data.activo;
+    renderDepreciacion(data.depreciacion);
+  } else {
+    alert('Error: ' + (d.error||'No se pudo guardar'));
+  }
+}
+
+async function resetFactorCM(){
+  if(!confirm('¿Restablecer el factor automático según tabla SII?')) return;
+  const r = await fetch(`/api/activos/${activoActual.id}/factor-cm`, {
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body: JSON.stringify({factor: null})
+  });
+  const d = await r.json();
+  if(d.ok){
+    const ficha = await fetch(`/api/activos/${activoActual.id}`);
+    const data = await ficha.json();
+    activoActual = data.activo;
+    renderDepreciacion(data.depreciacion);
+  }
 }
 
 let archivoExcel = null;
