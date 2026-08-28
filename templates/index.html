@@ -375,7 +375,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     <div class="form-row">
       <div class="form-group"><label>ID (auto)</label><input id="m-id-display" readonly style="background:#f5f5f5"></div>
       <div class="form-group"><label>Tipo *</label>
-        <select id="m-tipo">
+        <select id="m-tipo" onchange="adaptarFormularioPorTipo()">
           {% for t in tipos %}<option>{{ t }}</option>{% endfor %}
         </select></div>
     </div>
@@ -390,7 +390,11 @@ tr.seleccionado td{background:#EEF4FF !important}
     <div class="form-row">
       <div class="form-group"><label>Estado *</label>
         <select id="m-estado"><option>Bueno</option><option>En Reparación</option></select></div>
-      <div class="form-group"><label>Vida útil (años)</label><input id="m-vida" type="number" value="4" min="1"></div>
+      <div class="form-group" id="m-vida-grupo">
+        <label id="m-vida-label">Vida útil (años)</label>
+        <input id="m-vida" type="number" value="4" min="1">
+        <small id="m-vida-hint" style="color:#888;font-size:11px;display:none"></small>
+      </div>
     </div>
     <div class="form-row">
       <div class="form-group"><label>Edificio *</label>
@@ -758,7 +762,17 @@ async function abrirPanel(id){
   document.getElementById('p-marca').textContent=a.marca||'—';
   document.getElementById('p-modelo').textContent=a.modelo||'—';
   document.getElementById('p-serie').textContent=a.serie||'—';
-  document.getElementById('p-vida').textContent=(a.vida_util||'—')+' años';
+  const esTerreno = a.tipo === 'Terreno';
+  const esBienRaiz = a.tipo === 'Bien Raíz';
+  let vidaUtilText = '—';
+  if(esTerreno){
+    vidaUtilText = 'No deprecia';
+  } else if(esBienRaiz){
+    vidaUtilText = a.vida_util ? a.vida_util + ' meses' : '—';
+  } else {
+    vidaUtilText = (a.vida_util || '—') + (a.vida_util ? ' años' : '');
+  }
+  document.getElementById('p-vida').textContent = vidaUtilText;
   document.getElementById('p-estado').innerHTML=`<span class="badge ${eB[a.estado]||''}">${a.estado||'—'}</span>`;
   document.getElementById('p-edificio').textContent=a.edificio||'—';
   document.getElementById('p-sala').textContent=a.sala||'—';
@@ -892,7 +906,7 @@ function verDocumento(url, titulo){
   if(!url) return;
   const esPDF = url.startsWith('data:application/pdf') || url.endsWith('.pdf');
 
-  // Determinar extensión y nombre de descarga desde el data URL
+  // Determinar extensión desde el data URL
   let ext = 'jpg';
   if(esPDF) ext = 'pdf';
   else if(url.startsWith('data:image/png')) ext = 'png';
@@ -1281,6 +1295,38 @@ function resetFacturaModal(){
   document.getElementById('m-factura-label').innerHTML = '📎 Click para adjuntar imagen de la factura';
 }
 
+const TIPOS_SIN_DEPRECIACION = ['Terreno'];
+const TIPOS_VIDA_MESES = ['Bien Raíz'];
+
+function adaptarFormularioPorTipo(){
+  const tipo = document.getElementById('m-tipo').value;
+  const grupoVida  = document.getElementById('m-vida-grupo');
+  const labelVida  = document.getElementById('m-vida-label');
+  const inputVida  = document.getElementById('m-vida');
+  const hintVida   = document.getElementById('m-vida-hint');
+
+  if(TIPOS_SIN_DEPRECIACION.includes(tipo)){
+    // Terreno: sin depreciación → ocultamos vida útil
+    grupoVida.style.display = 'none';
+    inputVida.value = 0;
+  } else if(TIPOS_VIDA_MESES.includes(tipo)){
+    // Bien Raíz: vida útil en MESES
+    grupoVida.style.display = '';
+    labelVida.textContent = 'Vida útil remanente (meses)';
+    inputVida.placeholder = 'Ej: 42';
+    inputVida.value = inputVida.value == 4 ? 480 : inputVida.value;
+    hintVida.style.display = '';
+    hintVida.textContent = '42 meses = 3.5 años  |  480 meses = 40 años';
+  } else {
+    // Resto: vida útil en años (estándar)
+    grupoVida.style.display = '';
+    labelVida.textContent = 'Vida útil (años)';
+    inputVida.placeholder = '';
+    hintVida.style.display = 'none';
+    if(!inputVida.value || inputVida.value == 480) inputVida.value = 4;
+  }
+}
+
 function actualizarLabelCantidad(){
   const n = parseInt(document.getElementById('m-cantidad').value) || 1;
   const lbl = document.getElementById('m-cantidad-label');
@@ -1433,43 +1479,109 @@ async function guardarTraslado(){
 function renderDepreciacion(dep){
   const el = document.getElementById('dep-contenido');
   if(!dep){ el.innerHTML='<div class="loading">Sin fecha de compra o precio registrado</div>'; return; }
-  const color = dep.estado_dep==='Depreciado'?'#791F1F':dep.estado_dep==='Crítico'?'#C00':dep.estado_dep==='Avanzado'?'#ED7D31':'#27500A';
-  const bgBar = dep.estado_dep==='Depreciado'?'#FCEBEB':dep.estado_dep==='Crítico'?'#FCEBEB':dep.estado_dep==='Avanzado'?'#FCE4D6':'#E2EFDA';
+  const esTerreno = dep.es_terreno;
+  const color = esTerreno ? '#1e40af' :
+    dep.estado_dep==='Depreciado'?'#791F1F':dep.estado_dep==='Crítico'?'#C00':dep.estado_dep==='Avanzado'?'#ED7D31':'#27500A';
+  const bgBar = esTerreno ? '#EFF6FF' :
+    dep.estado_dep==='Depreciado'?'#FCEBEB':dep.estado_dep==='Crítico'?'#FCEBEB':dep.estado_dep==='Avanzado'?'#FCE4D6':'#E2EFDA';
+  const esManual = dep.fuente_cm === 'manual';
+  const meses = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  const mesNombre = dep.mes_adq ? meses[dep.mes_adq-1] : '';
+  const anioActual = new Date().getFullYear();
+  let vidaUtilInfo = '';
+  if(esTerreno){
+    vidaUtilInfo = `<div>📅 <strong>Tipo:</strong> Terreno — no se deprecia (solo corrección monetaria)</div><div style="margin-top:4px">⏱️ <strong>Antigüedad:</strong> ${dep.anos_transcurridos} años</div>`;
+  } else if(dep.vida_util_meses){
+    vidaUtilInfo = `<div style="margin-bottom:4px">📅 <strong>Vida útil remanente al registro:</strong> ${dep.vida_util} meses (${(dep.vida_util/12).toFixed(1)} años) — ${dep.tasa_anual}% anual</div><div style="margin-bottom:4px">⏱️ <strong>Años transcurridos:</strong> ${dep.anos_transcurridos}</div><div style="margin-bottom:4px">⏳ <strong>Años restantes:</strong> ${dep.anos_restantes}</div><div>📆 <strong>Término vida útil:</strong> ${dep.fecha_termino}</div>`;
+  } else {
+    vidaUtilInfo = `<div style="margin-bottom:4px">📅 <strong>Vida útil SII:</strong> ${dep.vida_util} años (${dep.tasa_anual}% anual)</div><div style="margin-bottom:4px">⏱️ <strong>Años transcurridos:</strong> ${dep.anos_transcurridos}</div><div style="margin-bottom:4px">⏳ <strong>Años restantes:</strong> ${dep.anos_restantes}</div><div>📆 <strong>Término vida útil:</strong> ${dep.fecha_termino}</div>`;
+  }
   el.innerHTML = `
-    <div style="background:${bgBar};border-radius:8px;padding:12px;margin-bottom:12px;text-align:center">
-      <div style="font-size:11px;color:#999;text-transform:uppercase;letter-spacing:.05em">Estado depreciación</div>
+    <div style="background:${bgBar};border-radius:8px;padding:12px;margin-bottom:10px;text-align:center">
+      <div style="font-size:11px;color:#999;text-transform:uppercase">Estado</div>
       <div style="font-size:20px;font-weight:700;color:${color};margin:4px 0">${dep.estado_dep}</div>
-      <div style="font-size:13px;color:#555">${dep.porcentaje_dep}% depreciado</div>
+      ${!esTerreno ? `<div style="font-size:13px;color:#555">${dep.porcentaje_dep}% depreciado</div>
       <div style="background:#ddd;border-radius:10px;height:10px;margin:8px 0;overflow:hidden">
-        <div style="background:${color};width:${Math.min(100,dep.porcentaje_dep)}%;height:100%;border-radius:10px;transition:width 0.5s"></div>
+        <div style="background:${color};width:${Math.min(100,dep.porcentaje_dep)}%;height:100%;border-radius:10px"></div>
+      </div>` : '<div style="font-size:12px;color:#1e40af">Valor libro = Valor corregido siempre</div>'}
+    </div>
+    <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:8px;padding:10px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:700;color:#1e40af;text-transform:uppercase;margin-bottom:8px">📊 Corrección Monetaria SII — Cierre ${anioActual}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+        <div style="text-align:center">
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase">Precio original</div>
+          <div style="font-size:14px;font-weight:700;color:#1F3864">$${dep.precio_original.toLocaleString('es-CL')}</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:10px;color:#64748b;text-transform:uppercase">Valor corregido</div>
+          <div style="font-size:14px;font-weight:700;color:#1e40af">$${dep.valor_corregido.toLocaleString('es-CL')}</div>
+        </div>
+      </div>
+      <details style="margin-bottom:8px">
+        <summary style="cursor:pointer;font-size:11px;color:#64748b;user-select:none">Factor CM acumulado: <strong>${dep.factor_cm}</strong> — ver desglose</summary>
+        <div style="margin-top:6px;background:#fff;border-radius:6px;padding:8px;font-size:11px">
+          ${(dep.desglose_cm||[]).map(d=>`<div style="display:flex;justify-content:space-between;padding:2px 0;border-bottom:1px solid #f0f0f0"><span>${d.ejercicio} ${d.ejercicio===dep.anio_adq?`(Adq. ${mesNombre})`:'(Cap. Inicial)'}</span><strong>${d.pct}%</strong></div>`).join('')}
+        </div>
+      </details>
+      <div style="background:#fff;border-radius:6px;padding:8px;display:flex;align-items:center;justify-content:space-between;gap:8px">
+        <div>
+          <div style="font-size:10px;color:#64748b">Factor CM (${mesNombre} ${dep.anio_adq})</div>
+          <div style="font-size:13px;font-weight:700;color:${esManual?'#b45309':'#1e40af'}">${dep.factor_cm} ${esManual?'<span style="font-size:10px;color:#b45309">(editado)</span>':'<span style="font-size:10px;color:#64748b">(SII auto)</span>'}</div>
+        </div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="number" id="input-factor-cm" step="0.001" min="0.1" max="10" value="${dep.factor_cm}" style="width:80px;padding:4px 6px;border:1px solid #bcd4f0;border-radius:6px;font-size:13px;text-align:center">
+          <button onclick="guardarFactorCM()" style="background:#1e40af;color:#fff;border:none;padding:5px 10px;border-radius:6px;font-size:12px;cursor:pointer;font-weight:600">Guardar</button>
+          ${esManual?`<button onclick="resetFactorCM()" style="background:#fee2e2;color:#991b1b;border:none;padding:5px 8px;border-radius:6px;font-size:11px;cursor:pointer">↺ Auto</button>`:''}
+        </div>
       </div>
     </div>
+    ${esTerreno ? `
+    <div style="background:#f8fafc;border-radius:8px;padding:12px;margin-bottom:10px;text-align:center;border:1px solid #BFDBFE">
+      <div style="font-size:10px;color:#64748b;text-transform:uppercase">Valor libro (= Valor corregido)</div>
+      <div style="font-size:20px;font-weight:700;color:#1e40af">$${dep.valor_corregido.toLocaleString('es-CL')}</div>
+      <div style="font-size:10px;color:#888;margin-top:4px">+$${(dep.valor_corregido-dep.precio_original).toLocaleString('es-CL')} por CM (× ${dep.factor_cm})</div>
+    </div>` : `
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
       <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
-        <div style="font-size:10px;color:#999;text-transform:uppercase">Precio original</div>
-        <div style="font-size:15px;font-weight:700;color:#1F3864">$${dep.precio_original.toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Valor libro</div>
+        <div style="font-size:15px;font-weight:700;color:${color}">$${dep.valor_libro.toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999">(sobre valor corregido)</div>
       </div>
       <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
-        <div style="font-size:10px;color:#999;text-transform:uppercase">Valor actual</div>
-        <div style="font-size:15px;font-weight:700;color:${color}">$${dep.valor_actual.toLocaleString('es-CL')}</div>
-      </div>
-      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
-        <div style="font-size:10px;color:#999;text-transform:uppercase">Depreciado</div>
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Depreciado acum.</div>
         <div style="font-size:15px;font-weight:700;color:#791F1F">$${dep.depreciacion_acum.toLocaleString('es-CL')}</div>
       </div>
       <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
         <div style="font-size:10px;color:#999;text-transform:uppercase">Valor residual</div>
         <div style="font-size:14px;font-weight:700;color:#888">$${dep.valor_residual.toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999">(10% valor corregido)</div>
       </div>
-    </div>
-    <div style="font-size:12px;color:#666;background:#f8fafc;border-radius:8px;padding:10px;border:1px solid #e5e8ed">
-      <div style="margin-bottom:4px">📅 <strong>Vida útil SII:</strong> ${dep.vida_util} años (${dep.tasa_anual}% anual)</div>
-      <div style="margin-bottom:4px">⏱️ <strong>Años transcurridos:</strong> ${dep.anos_transcurridos} años</div>
-      <div style="margin-bottom:4px">⏳ <strong>Años restantes:</strong> ${dep.anos_restantes} años</div>
-      <div>📆 <strong>Término vida útil:</strong> ${dep.fecha_termino}</div>
-    </div>
+      <div style="background:#f8fafc;border-radius:8px;padding:10px;text-align:center;border:1px solid #e5e8ed">
+        <div style="font-size:10px;color:#999;text-transform:uppercase">Corrección aplicada</div>
+        <div style="font-size:14px;font-weight:700;color:#1e40af">+$${(dep.valor_corregido-dep.precio_original).toLocaleString('es-CL')}</div>
+        <div style="font-size:10px;color:#999">× ${dep.factor_cm}</div>
+      </div>
+    </div>`}
+    <div style="font-size:12px;color:#666;background:#f8fafc;border-radius:8px;padding:10px;border:1px solid #e5e8ed">${vidaUtilInfo}</div>
   `;
 }
+
+async function guardarFactorCM(){
+  const factor = parseFloat(document.getElementById('input-factor-cm').value);
+  if(!factor || factor <= 0){ alert('Ingresa un factor válido mayor a 0'); return; }
+  const r = await fetch(`/api/activos/${activoActual.id}/factor-cm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({factor})});
+  const d = await r.json();
+  if(d.ok){ const f=await fetch(`/api/activos/${activoActual.id}`); const dt=await f.json(); activoActual=dt.activo; renderDepreciacion(dt.depreciacion); }
+  else alert('Error: '+(d.error||'No se pudo guardar'));
+}
+
+async function resetFactorCM(){
+  if(!confirm('¿Restablecer el factor automático según tabla SII?')) return;
+  const r = await fetch(`/api/activos/${activoActual.id}/factor-cm`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({factor:null})});
+  const d = await r.json();
+  if(d.ok){ const f=await fetch(`/api/activos/${activoActual.id}`); const dt=await f.json(); activoActual=dt.activo; renderDepreciacion(dt.depreciacion); }
+}
+
 
 let archivoExcel = null;
 function abrirModalImportar(){
