@@ -639,10 +639,18 @@ def emitir_acta():
             adj.add_header('Content-Disposition','attachment',
                            filename=f'Acta_{activo_id}_{folio}.{ext_adj}')
             msg.attach(adj)
-            # Timeout de 15s para evitar que gunicorn mate el worker por espera SMTP
-            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as srv:
-                srv.login(smtp_user, smtp_pass)
-                srv.sendmail(smtp_user, dest, msg.as_string())
+            # Intentar SSL (465) y si falla, STARTTLS (587)
+            try:
+                with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as srv:
+                    srv.login(smtp_user, smtp_pass)
+                    srv.sendmail(smtp_user, dest, msg.as_string())
+            except OSError:
+                with smtplib.SMTP('smtp.gmail.com', 587, timeout=15) as srv:
+                    srv.ehlo()
+                    srv.starttls()
+                    srv.ehlo()
+                    srv.login(smtp_user, smtp_pass)
+                    srv.sendmail(smtp_user, dest, msg.as_string())
 
         try:
             enviar(email_resp, True)
