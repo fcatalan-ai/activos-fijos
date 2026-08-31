@@ -573,7 +573,7 @@ def emitir_acta():
                 pdf.cell(0,5,nombre_resp,ln=True)
                 pdf.cell(0,5,f'RUT: {rut_resp or "-"}  |  {fecha_acta}',ln=True)
 
-            pdf_bytes = pdf.output(dest='S').encode('latin-1')
+            pdf_bytes = bytes(pdf.output())
             ext_adj, mime_adj = 'pdf', 'application/pdf'
 
         except ImportError:
