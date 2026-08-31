@@ -2128,7 +2128,7 @@ async function emitirActa(){
     cargo_resp: document.getElementById('acta-cargo').value.trim(),
     email_resp: email,
     observaciones: document.getElementById('acta-obs').value.trim(),
-    firma_base64: firmaCanvas.toDataURL('image/png'),
+    firma_base64: firmaCanvas.toDataURL('image/jpeg', 0.8),
   };
   try {
     const r = await fetch('/api/activos/emitir-acta', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
