@@ -9,6 +9,7 @@ from functools import wraps
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
+app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB para permitir firma en base64
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
 
@@ -446,21 +447,23 @@ def actualizar_factor_cm(id):
 @app.route('/api/activos/emitir-acta', methods=['POST'])
 @admin_required
 def emitir_acta():
-    data = request.json or {}
-
-    def s(v):
-        """Sanitiza texto para Helvetica: reemplaza caracteres no-latin1 por equivalentes ASCII."""
-        return (str(v or '')
-                .replace('—','-').replace('–','-').replace('\u2014','-').replace('\u2013','-')
-                .replace('\u00e1','a').replace('\u00e9','e').replace('\u00ed','i')
-                .replace('\u00f3','o').replace('\u00fa','u').replace('\u00fc','u')
-                .replace('\u00c1','A').replace('\u00c9','E').replace('\u00cd','I')
-                .replace('\u00d3','O').replace('\u00da','U')
-                .replace('\u00f1','n').replace('\u00d1','N')
-                .replace('\u00fc','u').replace('\u00e7','c')
-                .encode('latin-1','replace').decode('latin-1'))
-
     try:
+        data = request.get_json(force=True, silent=True) or {}
+        if not data:
+            return jsonify({'ok':False,'error':'No se recibieron datos. Intente de nuevo.'}), 400
+
+        def s(v):
+            """Sanitiza texto para Helvetica ASCII."""
+            return (str(v or '')
+                    .replace('—','-').replace('–','-').replace('\u2014','-').replace('\u2013','-')
+                    .replace('\u00e1','a').replace('\u00e9','e').replace('\u00ed','i')
+                    .replace('\u00f3','o').replace('\u00fa','u').replace('\u00fc','u')
+                    .replace('\u00c1','A').replace('\u00c9','E').replace('\u00cd','I')
+                    .replace('\u00d3','O').replace('\u00da','U')
+                    .replace('\u00f1','n').replace('\u00d1','N')
+                    .replace('\u00e7','c')
+                    .encode('latin-1','replace').decode('latin-1'))
+
         activo_id    = s(data.get('activo_id',''))
         subtipo      = s(data.get('subtipo',''))
         marca        = s(data.get('marca',''))
