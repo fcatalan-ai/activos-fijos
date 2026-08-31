@@ -583,7 +583,9 @@ def emitir_acta():
             if firma_b64 and 'base64,' in firma_b64:
                 raw = firma_b64.split('base64,')[1]
                 firma_bytes = base64.b64decode(raw)
-                firma_path = f'/tmp/firma_{folio}.png'
+                # Extensión correcta según tipo del data URL
+                firma_ext = 'jpg' if ('image/jpeg' in firma_b64 or 'image/jpg' in firma_b64) else 'png'
+                firma_path = f'/tmp/firma_{folio}.{firma_ext}'
                 with open(firma_path,'wb') as ff:
                     ff.write(firma_bytes)
                 pdf.set_font('Helvetica','B',10)
