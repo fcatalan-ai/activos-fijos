@@ -511,6 +511,7 @@ def emitir_acta():
 
         try:
             from fpdf import FPDF
+            from fpdf.enums import XPos, YPos
             pdf = FPDF()
             pdf.add_page()
             pdf.set_margins(20, 20, 20)
@@ -519,17 +520,17 @@ def emitir_acta():
             pdf.set_font('Helvetica','B',16)
             pdf.set_fill_color(31,56,100)
             pdf.set_text_color(255,255,255)
-            pdf.cell(0,12,'ACTA DE ENTREGA / RESPONSABILIDAD',ln=True,align='C',fill=True)
+            pdf.cell(0,12,'ACTA DE ENTREGA / RESPONSABILIDAD',new_x=XPos.LMARGIN,new_y=YPos.NEXT,align='C',fill=True)
             pdf.set_text_color(0,0,0)
             pdf.ln(3)
             pdf.set_font('Helvetica','',10)
-            pdf.cell(0,6,f'Colegio Centenario de Temuco | Folio: {folio} | Fecha: {fecha_acta}',ln=True,align='C')
+            pdf.cell(0,6,f'Colegio Centenario de Temuco | Folio: {folio} | Fecha: {fecha_acta}',new_x=XPos.LMARGIN,new_y=YPos.NEXT,align='C')
             pdf.ln(5)
 
             def sec(titulo):
                 pdf.set_font('Helvetica','B',11)
                 pdf.set_fill_color(220,228,240)
-                pdf.cell(0,8,f'  {titulo}',ln=True,fill=True)
+                pdf.cell(0,8,f'  {titulo}',new_x=XPos.LMARGIN,new_y=YPos.NEXT,fill=True)
                 pdf.set_font('Helvetica','',10); pdf.ln(2)
 
             def row(label, valor, w=58):
@@ -539,7 +540,7 @@ def emitir_acta():
                 pdf.set_font('Helvetica','B',10)
                 pdf.cell(w, 7, label+':')
                 pdf.set_font('Helvetica','',10)
-                pdf.cell(ancho_valor, 7, valor_str, ln=True)
+                pdf.cell(ancho_valor, 7, valor_str, new_x=XPos.LMARGIN,new_y=YPos.NEXT)
 
             sec('DATOS DEL ACTIVO FIJO')
             row('ID / Codigo',    activo_id)
@@ -589,13 +590,13 @@ def emitir_acta():
                 with open(firma_path,'wb') as ff:
                     ff.write(firma_bytes)
                 pdf.set_font('Helvetica','B',10)
-                pdf.cell(0,6,'Firma del responsable:',ln=True)
+                pdf.cell(0,6,'Firma del responsable:',new_x=XPos.LMARGIN,new_y=YPos.NEXT)
                 pdf.image(firma_path, x=20, w=80, h=30)
                 pdf.ln(2)
                 pdf.set_font('Helvetica','',9)
-                pdf.cell(0,5,'_________________________',ln=True)
-                pdf.cell(0,5,nombre_resp,ln=True)
-                pdf.cell(0,5,f'RUT: {rut_resp or "-"}  |  {fecha_acta}',ln=True)
+                pdf.cell(0,5,'_________________________',new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                pdf.cell(0,5,nombre_resp,new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                pdf.cell(0,5,f'RUT: {rut_resp or "-"}  |  {fecha_acta}',new_x=XPos.LMARGIN,new_y=YPos.NEXT)
 
             pdf_bytes = bytes(pdf.output())
             ext_adj, mime_adj = 'pdf', 'application/pdf'
@@ -638,13 +639,23 @@ def emitir_acta():
             adj.add_header('Content-Disposition','attachment',
                            filename=f'Acta_{activo_id}_{folio}.{ext_adj}')
             msg.attach(adj)
-            with smtplib.SMTP_SSL('smtp.gmail.com',465) as srv:
+            # Timeout de 15s para evitar que gunicorn mate el worker por espera SMTP
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as srv:
                 srv.login(smtp_user, smtp_pass)
                 srv.sendmail(smtp_user, dest, msg.as_string())
 
-        enviar(email_resp, True)
-        if email_admin and email_admin != email_resp:
-            enviar(email_admin, False)
+        try:
+            enviar(email_resp, True)
+        except Exception as smtp_err:
+            print(f'[emitir_acta] Error enviando a {email_resp}: {smtp_err}')
+            return jsonify({'ok':False,'error':f'Error al enviar correo a {email_resp}: {str(smtp_err)}'}), 500
+
+        try:
+            if email_admin and email_admin != email_resp:
+                enviar(email_admin, False)
+        except Exception as smtp_err2:
+            print(f'[emitir_acta] Error enviando copia a admin: {smtp_err2}')
+            # No falla si solo falla la copia al admin
 
         db_execute(
             "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
