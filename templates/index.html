@@ -288,6 +288,9 @@ tr.seleccionado td{background:#EEF4FF !important}
         <button class="btn-sm" style="flex:1" onclick="abrirModalTraslado()">🚚 Traslado</button>
         <button class="btn-sm" style="flex:1;color:#c00;border-color:#fcc" onclick="confirmarEliminar()">🗑️ Eliminar</button>
       </div>
+      <div style="margin-top:8px">
+        <button class="btn-sm" style="width:100%;background:#1F3864;color:#fff;border-color:#1F3864;font-weight:600" onclick="abrirModalActa()">📋 Emitir Acta de Entrega</button>
+      </div>
       {% endif %}
     </div>
 
@@ -540,6 +543,52 @@ tr.seleccionado td{background:#EEF4FF !important}
   </div>
 </div>
 
+
+<!-- MODAL ACTA DE ENTREGA -->
+<div class="modal-bg" id="modal-acta">
+  <div class="modal" style="max-width:520px">
+    <h3>📋 Acta de Entrega / Responsabilidad</h3>
+    <p style="font-size:12px;color:#666;margin-bottom:14px" id="acta-info">—</p>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Nombre del responsable *</label>
+        <input id="acta-nombre" placeholder="Nombre completo">
+      </div>
+      <div class="form-group">
+        <label>RUT</label>
+        <input id="acta-rut" placeholder="12.345.678-9">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label>Cargo / Función</label>
+        <input id="acta-cargo" placeholder="Ej: Docente, Auxiliar">
+      </div>
+      <div class="form-group">
+        <label>Correo responsable *</label>
+        <input id="acta-email" type="email" placeholder="correo@colegiocentenariotemuco.cl">
+      </div>
+    </div>
+    <div class="form-group">
+      <label>Observaciones del estado del activo</label>
+      <textarea id="acta-obs" rows="2" style="resize:vertical" placeholder="Ej: Equipo en buen estado, con todos sus accesorios"></textarea>
+    </div>
+    <div style="margin-top:12px">
+      <label style="font-size:12px;font-weight:600;color:#444;display:block;margin-bottom:6px">✍️ Firma del responsable (dibuja con el dedo o mouse)</label>
+      <div style="position:relative;border:2px solid #1F3864;border-radius:8px;background:#f9f9f9;touch-action:none">
+        <canvas id="firma-canvas" style="display:block;width:100%;height:160px;border-radius:6px;cursor:crosshair"></canvas>
+        <button onclick="limpiarFirma()" style="position:absolute;top:6px;right:6px;background:#fff;border:1px solid #ccc;border-radius:5px;padding:3px 8px;font-size:11px;cursor:pointer;color:#666">🗑 Limpiar</button>
+        <div id="firma-hint" style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);color:#bbb;font-size:13px;pointer-events:none;user-select:none">Firma aquí</div>
+      </div>
+      <p style="font-size:10px;color:#999;margin-top:4px">Al firmar, el responsable declara recibir conforme el activo descrito.</p>
+    </div>
+    <div id="acta-status" style="font-size:12px;color:#666;margin-top:8px;min-height:18px"></div>
+    <div class="modal-btns" style="margin-top:12px">
+      <button class="btn-cancel" onclick="cerrarModal('modal-acta')">Cancelar</button>
+      <button class="btn-save" id="btn-emitir-acta" onclick="emitirActa()">📤 Emitir y Enviar Acta</button>
+    </div>
+  </div>
+</div>
 
 <div class="modal-bg" id="modal-traslado">
   <div class="modal">
@@ -905,18 +954,6 @@ async function subirDocumento(tipo){
 function verDocumento(url, titulo){
   if(!url) return;
   const esPDF = url.startsWith('data:application/pdf') || url.endsWith('.pdf');
-
-  // Determinar extensión desde el data URL
-  let ext = 'jpg';
-  if(esPDF) ext = 'pdf';
-  else if(url.startsWith('data:image/png')) ext = 'png';
-  else if(url.startsWith('data:image/webp')) ext = 'webp';
-  else if(url.startsWith('data:image/jpeg') || url.startsWith('data:image/jpg')) ext = 'jpg';
-
-  const idActivo = activoActual ? activoActual.id : 'activo';
-  const tipoLabel = titulo.toLowerCase().replace(/\s+/g,'_');
-  const nombreArchivo = `${idActivo}_${tipoLabel}.${ext}`;
-
   const overlay = document.createElement('div');
   overlay.style.cssText='position:fixed;inset:0;background:rgba(0,0,0,0.85);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px';
   overlay.onclick = ()=>document.body.removeChild(overlay);
@@ -927,7 +964,7 @@ function verDocumento(url, titulo){
     <div style="color:#fff;font-size:13px;font-weight:600;margin-bottom:10px;opacity:0.8">${titulo} — click fuera para cerrar</div>
     ${contenido}
     <div style="margin-top:12px;display:flex;gap:10px">
-      <a href="${url}" download="${nombreArchivo}" onclick="event.stopPropagation()" style="background:#fff;color:#1F3864;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">⬇️ Descargar ${ext.toUpperCase()}</a>
+      <a href="${url}" download onclick="event.stopPropagation()" style="background:#fff;color:#1F3864;padding:8px 16px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none">⬇️ Descargar</a>
       <button onclick="document.body.removeChild(this.closest('div[style*=fixed]'))" style="background:rgba(255,255,255,0.2);color:#fff;border:none;padding:8px 16px;border-radius:8px;font-size:13px;cursor:pointer">✕ Cerrar</button>
     </div>`;
   document.body.appendChild(overlay);
@@ -2013,6 +2050,145 @@ cargarProveedores();
     sel.appendChild(o);
   });
 })();
+// ─── SISTEMA DE ACTAS DE ENTREGA ────────────────────────────────────────────
+let firmaCanvas, firmaCtx, firmaDibujando = false, firmaVacia = true;
+
+function initFirmaCanvas(){
+  firmaCanvas = document.getElementById('firma-canvas');
+  if(!firmaCanvas) return;
+  // Ajustar resolución del canvas al tamaño real en pantalla
+  const rect = firmaCanvas.getBoundingClientRect();
+  firmaCanvas.width  = rect.width  * (window.devicePixelRatio || 1);
+  firmaCanvas.height = rect.height * (window.devicePixelRatio || 1);
+  firmaCtx = firmaCanvas.getContext('2d');
+  firmaCtx.scale(window.devicePixelRatio || 1, window.devicePixelRatio || 1);
+  firmaCtx.strokeStyle = '#1F3864';
+  firmaCtx.lineWidth   = 2.5;
+  firmaCtx.lineCap     = 'round';
+  firmaCtx.lineJoin    = 'round';
+
+  const pos = (e) => {
+    const r = firmaCanvas.getBoundingClientRect();
+    if(e.touches) return { x: e.touches[0].clientX - r.left, y: e.touches[0].clientY - r.top };
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  };
+  const start = (e) => {
+    e.preventDefault();
+    firmaDibujando = true;
+    firmaVacia = false;
+    document.getElementById('firma-hint').style.display = 'none';
+    const p = pos(e);
+    firmaCtx.beginPath();
+    firmaCtx.moveTo(p.x, p.y);
+  };
+  const move = (e) => {
+    if(!firmaDibujando) return;
+    e.preventDefault();
+    const p = pos(e);
+    firmaCtx.lineTo(p.x, p.y);
+    firmaCtx.stroke();
+  };
+  const end = () => { firmaDibujando = false; };
+
+  firmaCanvas.addEventListener('mousedown', start);
+  firmaCanvas.addEventListener('mousemove', move);
+  firmaCanvas.addEventListener('mouseup',   end);
+  firmaCanvas.addEventListener('mouseleave',end);
+  firmaCanvas.addEventListener('touchstart', start, {passive:false});
+  firmaCanvas.addEventListener('touchmove',  move,  {passive:false});
+  firmaCanvas.addEventListener('touchend',   end);
+}
+
+function limpiarFirma(){
+  if(!firmaCtx) return;
+  firmaCtx.clearRect(0, 0, firmaCanvas.width, firmaCanvas.height);
+  firmaVacia = true;
+  document.getElementById('firma-hint').style.display = '';
+}
+
+function abrirModalActa(){
+  if(!activoActual) return;
+  const a = activoActual;
+  document.getElementById('acta-info').textContent =
+    `${a.id} — ${a.subtipo||''} ${a.marca||''} ${a.modelo||''} · Serie: ${a.serie||'—'} · Estado: ${a.estado}`;
+  document.getElementById('acta-nombre').value = a.responsable || '';
+  document.getElementById('acta-rut').value    = '';
+  document.getElementById('acta-cargo').value  = '';
+  document.getElementById('acta-email').value  = '';
+  document.getElementById('acta-obs').value    = '';
+  document.getElementById('acta-status').textContent = '';
+  document.getElementById('btn-emitir-acta').disabled = false;
+  document.getElementById('btn-emitir-acta').textContent = '📤 Emitir y Enviar Acta';
+  document.getElementById('modal-acta').classList.add('show');
+  // Inicializar canvas tras pequeño delay para que el modal sea visible
+  setTimeout(()=>{ limpiarFirma(); initFirmaCanvas(); }, 120);
+}
+
+async function emitirActa(){
+  const nombre = document.getElementById('acta-nombre').value.trim();
+  const email  = document.getElementById('acta-email').value.trim();
+  if(!nombre){ alert('El nombre del responsable es obligatorio.'); return; }
+  if(!email || !email.includes('@')){ alert('El correo del responsable es obligatorio.'); return; }
+  if(firmaVacia){ alert('Por favor dibuja la firma del responsable antes de emitir el acta.'); return; }
+
+  const btn = document.getElementById('btn-emitir-acta');
+  btn.disabled = true;
+  btn.textContent = 'Generando acta...';
+  document.getElementById('acta-status').textContent = 'Preparando el acta...';
+
+  // Capturar firma como imagen base64
+  const firmaDataUrl = firmaCanvas.toDataURL('image/png');
+
+  const payload = {
+    activo_id:      activoActual.id,
+    subtipo:        activoActual.subtipo   || '',
+    marca:          activoActual.marca     || '',
+    modelo:         activoActual.modelo    || '',
+    serie:          activoActual.serie     || '—',
+    estado:         activoActual.estado    || '',
+    edificio:       activoActual.edificio  || '',
+    sala:           activoActual.sala      || '',
+    fecha_compra:   activoActual.fecha_compra || '',
+    precio:         activoActual.precio    || 0,
+    documento:      activoActual.documento || '',
+    nombre_resp:    nombre,
+    rut_resp:       document.getElementById('acta-rut').value.trim(),
+    cargo_resp:     document.getElementById('acta-cargo').value.trim(),
+    email_resp:     email,
+    observaciones:  document.getElementById('acta-obs').value.trim(),
+    firma_base64:   firmaDataUrl,
+  };
+
+  document.getElementById('acta-status').textContent = 'Enviando correos...';
+  btn.textContent = 'Enviando...';
+
+  try {
+    const r = await fetch('/api/activos/emitir-acta', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify(payload)
+    });
+    const d = await r.json();
+    if(d.ok){
+      document.getElementById('acta-status').innerHTML =
+        `<span style="color:#27500A;font-weight:600">✅ Acta enviada correctamente a ${email} y al encargado.</span>`;
+      btn.textContent = '✅ Acta enviada';
+      // Recargar historial del activo
+      setTimeout(()=>{ cerrarModal('modal-acta'); abrirPanel(activoActual.id); }, 2000);
+    } else {
+      document.getElementById('acta-status').innerHTML =
+        `<span style="color:#c00">❌ Error: ${d.error||'No se pudo enviar el acta'}</span>`;
+      btn.disabled = false;
+      btn.textContent = '📤 Emitir y Enviar Acta';
+    }
+  } catch(e){
+    document.getElementById('acta-status').innerHTML =
+      `<span style="color:#c00">❌ Error de conexión: ${e.message}</span>`;
+    btn.disabled = false;
+    btn.textContent = '📤 Emitir y Enviar Acta';
+  }
+}
+// ─── FIN SISTEMA DE ACTAS ────────────────────────────────────────────────────
 </script>
 </body>
 </html>
