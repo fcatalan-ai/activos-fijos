@@ -2132,7 +2132,15 @@ async function emitirActa(){
   };
   try {
     const r = await fetch('/api/activos/emitir-acta', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
-    const d = await r.json();
+    let d;
+    const texto = await r.text();
+    try { d = JSON.parse(texto); } catch(pe) {
+      // El servidor devolvió HTML en vez de JSON — mostrar primeras líneas
+      const preview = texto.substring(0,200).replace(/</g,'&lt;');
+      document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ El servidor devolvió HTML (código ${r.status}). Respuesta: <code>${preview}</code></span>`;
+      btn.disabled=false; btn.textContent='📤 Emitir y Enviar Acta';
+      return;
+    }
     if(d.ok){
       document.getElementById('acta-status').innerHTML = `<span style="color:#27500A;font-weight:600">✅ Acta enviada a ${email} y al encargado. Folio: ${d.folio}</span>`;
       btn.textContent = '✅ Enviada';
