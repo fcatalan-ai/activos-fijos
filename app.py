@@ -510,9 +510,14 @@ def emitir_acta():
                 pdf.cell(0,8,f'  {titulo}',ln=True,fill=True)
                 pdf.set_font('Helvetica','',10); pdf.ln(2)
 
-            def row(label, valor, w=60):
-                pdf.set_font('Helvetica','B',10); pdf.cell(w,7,label+':')
-                pdf.set_font('Helvetica','',10);  pdf.multi_cell(0,7,str(valor))
+            def row(label, valor, w=58):
+                ancho_pagina = pdf.w - pdf.l_margin - pdf.r_margin
+                ancho_valor  = ancho_pagina - w
+                valor_str    = str(valor)[:80]  # truncar por seguridad
+                pdf.set_font('Helvetica','B',10)
+                pdf.cell(w, 7, label+':')
+                pdf.set_font('Helvetica','',10)
+                pdf.cell(ancho_valor, 7, valor_str, ln=True)
 
             sec('DATOS DEL ACTIVO FIJO')
             row('ID / Codigo',    activo_id)
