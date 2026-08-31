@@ -10,6 +10,14 @@ from functools import wraps
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'activos-colegio-2025-secret')
 app.config['MAX_CONTENT_LENGTH'] = 10 * 1024 * 1024  # 10MB para permitir firma en base64
+
+@app.errorhandler(413)
+def too_large(e):
+    return jsonify({'ok':False,'error':'Archivo demasiado grande. Reduce el tamaño de la firma.'}), 413
+
+@app.errorhandler(500)
+def server_error(e):
+    return jsonify({'ok':False,'error':f'Error interno del servidor: {str(e)}'}), 500
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
 FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
 
@@ -421,8 +429,12 @@ def login_required(f):
 def admin_required(f):
     @wraps(f)
     def decorated(*args, **kwargs):
-        if 'user' not in session: return redirect('/login')
-        if session.get('rol') != 'admin': return jsonify({'error':'Sin permisos'}), 403
+        if 'user' not in session:
+            if request.path.startswith('/api/'):
+                return jsonify({'ok':False,'error':'Sesión expirada, recarga la página'}), 401
+            return redirect('/login')
+        if session.get('rol') != 'admin':
+            return jsonify({'error':'Sin permisos'}), 403
         return f(*args, **kwargs)
     return decorated
 
@@ -443,6 +455,13 @@ def actualizar_factor_cm(id):
         return jsonify({'ok': True, 'fuente': 'manual', 'factor': factor})
     except:
         return jsonify({'error': 'Factor inválido'}), 400
+
+@app.route('/api/activos/test-acta', methods=['POST'])
+@admin_required
+def test_acta():
+    """Endpoint de diagnóstico para verificar que el endpoint de actas es alcanzable."""
+    data = request.get_json(force=True, silent=True) or {}
+    return jsonify({'ok':True,'recibido':len(str(data)),'usuario':session.get('user')})
 
 @app.route('/api/activos/emitir-acta', methods=['POST'])
 @admin_required
