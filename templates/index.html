@@ -555,7 +555,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Cargo / Función</label><input id="acta-cargo" placeholder="Ej: Docente, Auxiliar"></div>
-      <div class="form-group"><label>Correo responsable <span style="font-weight:400;color:#999">(opcional)</span></label><input id="acta-email" type="email" placeholder="correo@colegiocentenariotemuco.cl"></div>
+      <div class="form-group"><label>Correo <span style="font-weight:400;color:#999">(opcional)</span></label><input id="acta-email" type="email" placeholder="correo@colegiocentenariotemuco.cl"></div>
     </div>
     <div class="form-group">
       <label>Observaciones del estado del activo</label>
@@ -573,7 +573,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     <div id="acta-status" style="font-size:12px;color:#666;margin-top:8px;min-height:18px"></div>
     <div class="modal-btns" style="margin-top:12px">
       <button class="btn-cancel" onclick="cerrarModal('modal-acta')">Cancelar</button>
-      <button class="btn-save" id="btn-emitir-acta" onclick="emitirActa()">📥 Generar y Descargar Acta</button>
+      <button class="btn-save" id="btn-emitir-acta" onclick="emitirActa()">📋 Generar Acta PDF</button>
     </div>
   </div>
 </div>
@@ -2094,7 +2094,7 @@ function limpiarFirma(){
 function abrirModalActa(){
   if(!activoActual) return;
   const a = activoActual;
-  document.getElementById('acta-info').textContent = `${a.id} — ${a.subtipo||''} ${a.marca||''} ${a.modelo||''} · Serie: ${a.serie||'—'} · Estado: ${a.estado}`;
+  document.getElementById('acta-info').textContent = a.id + ' — ' + (a.subtipo||'') + ' ' + (a.marca||'') + ' ' + (a.modelo||'') + ' · Serie: ' + (a.serie||'—') + ' · Estado: ' + a.estado;
   document.getElementById('acta-nombre').value = a.responsable || '';
   document.getElementById('acta-rut').value = '';
   document.getElementById('acta-cargo').value = '';
@@ -2102,19 +2102,18 @@ function abrirModalActa(){
   document.getElementById('acta-obs').value = '';
   document.getElementById('acta-status').textContent = '';
   document.getElementById('btn-emitir-acta').disabled = false;
-  document.getElementById('btn-emitir-acta').textContent = '📥 Generar y Descargar Acta';
+  document.getElementById('btn-emitir-acta').textContent = '📋 Generar Acta PDF';
   document.getElementById('modal-acta').classList.add('show');
   setTimeout(() => { limpiarFirma(); initFirmaCanvas(); }, 150);
 }
 
 async function emitirActa(){
   const nombre = document.getElementById('acta-nombre').value.trim();
-  const email  = document.getElementById('acta-email').value.trim();
   if(!nombre){ alert('El nombre del responsable es obligatorio.'); return; }
   if(firmaVacia){ alert('Por favor dibuja la firma del responsable antes de generar el acta.'); return; }
   const btn = document.getElementById('btn-emitir-acta');
   btn.disabled = true;
-  btn.textContent = '⏳ Generando acta...';
+  btn.textContent = '⏳ Generando...';
   document.getElementById('acta-status').textContent = 'Preparando PDF...';
   const payload = {
     activo_id: activoActual.id, subtipo: activoActual.subtipo||'',
@@ -2125,40 +2124,59 @@ async function emitirActa(){
     documento: activoActual.documento||'', nombre_resp: nombre,
     rut_resp: document.getElementById('acta-rut').value.trim(),
     cargo_resp: document.getElementById('acta-cargo').value.trim(),
-    email_resp: email,
+    email_resp: document.getElementById('acta-email').value.trim(),
     observaciones: document.getElementById('acta-obs').value.trim(),
     firma_base64: firmaCanvas.toDataURL('image/png'),
   };
   try {
-    const r = await fetch('/api/activos/emitir-acta', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
+    const r = await fetch('/api/activos/emitir-acta', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(payload)
+    });
     let d;
     const texto = await r.text();
     try { d = JSON.parse(texto); } catch(pe) {
-      const preview = texto.substring(0,200).replace(/</g,'&lt;');
-      document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ Error del servidor (${r.status}): <code>${preview}</code></span>`;
-      btn.disabled=false; btn.textContent='📥 Generar y Descargar Acta';
+      document.getElementById('acta-status').innerHTML = '<span style="color:#c00">❌ Error del servidor (' + r.status + ')</span>';
+      btn.disabled=false; btn.textContent='📋 Generar Acta PDF';
       return;
     }
     if(d.ok){
-      // Descargar PDF directamente en el navegador
-      const link = document.createElement('a');
-      link.href = `data:${d.mime_tipo};base64,${d.pdf_b64}`;
-      link.download = d.nombre_archivo;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      document.getElementById('acta-status').innerHTML =
-        `<span style="color:#27500A;font-weight:600">✅ Acta generada — Folio: ${d.folio}</span><br>
-        <span style="font-size:11px;color:#555">El PDF se descargó en tu dispositivo. Envíalo manualmente a <b>${email}</b> como respaldo del acta.</span>`;
-      btn.textContent = '✅ Descargada';
+      // Convertir base64 a Blob — compatible con iOS Safari
+      const byteChars = atob(d.pdf_b64);
+      const byteArr = new Uint8Array(byteChars.length);
+      for(let i=0; i<byteChars.length; i++) byteArr[i] = byteChars.charCodeAt(i);
+      const blob = new Blob([byteArr], {type: d.mime_tipo});
+      const blobUrl = URL.createObjectURL(blob);
+
+      // Intentar descarga directa primero (Android/PC)
+      const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+      if(isIOS){
+        // iOS: abrir en nueva pestaña — el visor nativo de PDF permite guardar/compartir
+        window.open(blobUrl, '_blank');
+        document.getElementById('acta-status').innerHTML =
+          '<span style="color:#27500A;font-weight:600">✅ PDF generado — Folio: ' + d.folio + '</span><br>' +
+          '<span style="font-size:11px;color:#555">En iOS: usa el botón Compartir (□↑) del visor para guardar el PDF.</span>';
+      } else {
+        // Android/PC: descarga directa
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = d.nombre_archivo;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        document.getElementById('acta-status').innerHTML =
+          '<span style="color:#27500A;font-weight:600">✅ Acta descargada — Folio: ' + d.folio + '</span>';
+      }
+      btn.textContent = '✅ Generada';
       setTimeout(() => { cerrarModal('modal-acta'); abrirPanel(activoActual.id); }, 4000);
     } else {
-      document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ ${d.error||'Error al generar el acta'}</span>`;
-      btn.disabled=false; btn.textContent='📥 Generar y Descargar Acta';
+      document.getElementById('acta-status').innerHTML = '<span style="color:#c00">❌ ' + (d.error||'Error al generar') + '</span>';
+      btn.disabled=false; btn.textContent='📋 Generar Acta PDF';
     }
   } catch(e) {
-    document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ Error: ${e.message}</span>`;
-    btn.disabled=false; btn.textContent='📥 Generar y Descargar Acta';
+    document.getElementById('acta-status').innerHTML = '<span style="color:#c00">❌ Error: ' + e.message + '</span>';
+    btn.disabled=false; btn.textContent='📋 Generar Acta PDF';
   }
 }
 // ─── FIN ACTAS ───────────────────────────────────────────────────────────────
