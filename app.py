@@ -469,18 +469,16 @@ def emitir_acta():
     try:
         data = request.get_json(force=True, silent=True) or {}
         if not data:
-            return jsonify({'ok':False,'error':'No se recibieron datos. Intente de nuevo.'}), 400
+            return jsonify({'ok':False,'error':'No se recibieron datos'}), 400
 
         def s(v):
-            """Sanitiza texto para Helvetica ASCII."""
             return (str(v or '')
-                    .replace('—','-').replace('–','-').replace('\u2014','-').replace('\u2013','-')
+                    .replace('\u2014','-').replace('\u2013','-')
                     .replace('\u00e1','a').replace('\u00e9','e').replace('\u00ed','i')
                     .replace('\u00f3','o').replace('\u00fa','u').replace('\u00fc','u')
                     .replace('\u00c1','A').replace('\u00c9','E').replace('\u00cd','I')
                     .replace('\u00d3','O').replace('\u00da','U')
-                    .replace('\u00f1','n').replace('\u00d1','N')
-                    .replace('\u00e7','c')
+                    .replace('\u00f1','n').replace('\u00d1','N').replace('\u00e7','c')
                     .encode('latin-1','replace').decode('latin-1'))
 
         activo_id    = s(data.get('activo_id',''))
@@ -497,18 +495,13 @@ def emitir_acta():
         nombre_resp  = s(data.get('nombre_resp',''))
         rut_resp     = s(data.get('rut_resp',''))
         cargo_resp   = s(data.get('cargo_resp',''))
-        email_resp   = data.get('email_resp','')   # email no se sanitiza
+        email_resp   = data.get('email_resp','')
         obs          = s(data.get('observaciones',''))
         firma_b64    = data.get('firma_base64','')
         fecha_acta   = datetime.now().strftime('%d-%m-%Y %H:%M')
         folio        = datetime.now().strftime('%Y%m%d%H%M%S')
 
-        smtp_user   = os.environ.get('ACTA_SMTP_USER','')
-        smtp_pass   = os.environ.get('ACTA_SMTP_PASS','')
-        email_admin = os.environ.get('ACTA_EMAIL_ADMIN','')
-        if not smtp_user or not smtp_pass:
-            return jsonify({'ok':False,'error':'Credenciales SMTP no configuradas'}), 500
-
+        # Generar PDF en memoria — no se guarda en disco ni BD
         try:
             from fpdf import FPDF
             from fpdf.enums import XPos, YPos
@@ -516,7 +509,6 @@ def emitir_acta():
             pdf.add_page()
             pdf.set_margins(20, 20, 20)
 
-            # Encabezado
             pdf.set_font('Helvetica','B',16)
             pdf.set_fill_color(31,56,100)
             pdf.set_text_color(255,255,255)
@@ -534,13 +526,9 @@ def emitir_acta():
                 pdf.set_font('Helvetica','',10); pdf.ln(2)
 
             def row(label, valor, w=58):
-                ancho_pagina = pdf.w - pdf.l_margin - pdf.r_margin
-                ancho_valor  = ancho_pagina - w
-                valor_str    = str(valor)[:80]  # truncar por seguridad
-                pdf.set_font('Helvetica','B',10)
-                pdf.cell(w, 7, label+':')
-                pdf.set_font('Helvetica','',10)
-                pdf.cell(ancho_valor, 7, valor_str, new_x=XPos.LMARGIN,new_y=YPos.NEXT)
+                aw = pdf.w - pdf.l_margin - pdf.r_margin - w
+                pdf.set_font('Helvetica','B',10); pdf.cell(w,7,label+':')
+                pdf.set_font('Helvetica','',10);  pdf.cell(aw,7,str(valor)[:80],new_x=XPos.LMARGIN,new_y=YPos.NEXT)
 
             sec('DATOS DEL ACTIVO FIJO')
             row('ID / Codigo',    activo_id)
@@ -570,21 +558,18 @@ def emitir_acta():
 
             sec('DECLARACION')
             pdf.set_font('Helvetica','',10)
-            decl = (
-                f'Yo, {nombre_resp}, RUT {rut_resp or "-"}, cargo {cargo_resp or "-"}, '
-                f'declaro haber recibido conforme el activo fijo {activo_id} '
-                f'({subtipo} {marca} {modelo}).strip(), '
-                f'comprometiendome a su uso responsable, conservacion y restitucion '
-                f'cuando sea requerido. La presente acta es vinculante para efectos '
-                f'administrativos del Colegio Centenario de Temuco.'
-            )
+            decl = (f'Yo, {nombre_resp}, RUT {rut_resp or "-"}, cargo {cargo_resp or "-"}, '
+                    f'declaro haber recibido conforme el activo fijo {activo_id} '
+                    f'({subtipo} {marca} {modelo}), comprometiendome a su uso responsable, '
+                    f'conservacion y restitucion cuando sea requerido por la institucion. '
+                    f'La presente acta es vinculante para efectos administrativos del '
+                    f'Colegio Centenario de Temuco.')
             pdf.multi_cell(0,6,decl)
             pdf.ln(8)
 
             if firma_b64 and 'base64,' in firma_b64:
                 raw = firma_b64.split('base64,')[1]
                 firma_bytes = base64.b64decode(raw)
-                # Extensión correcta según tipo del data URL
                 firma_ext = 'jpg' if ('image/jpeg' in firma_b64 or 'image/jpg' in firma_b64) else 'png'
                 firma_path = f'/tmp/firma_{folio}.{firma_ext}'
                 with open(firma_path,'wb') as ff:
@@ -599,83 +584,49 @@ def emitir_acta():
                 pdf.cell(0,5,f'RUT: {rut_resp or "-"}  |  {fecha_acta}',new_x=XPos.LMARGIN,new_y=YPos.NEXT)
 
             pdf_bytes = bytes(pdf.output())
-            ext_adj, mime_adj = 'pdf', 'application/pdf'
+            nombre_archivo = f'Acta_{activo_id}_{folio}.pdf'
+            mime_tipo = 'application/pdf'
 
         except ImportError:
+            # Fallback HTML si fpdf2 no está instalado
             html = (f'<html><body style="font-family:Arial;margin:30px">'
                     f'<h2 style="background:#1F3864;color:#fff;padding:10px">ACTA DE ENTREGA - {activo_id}</h2>'
                     f'<p><b>Folio:</b> {folio} | <b>Fecha:</b> {fecha_acta}</p>'
-                    f'<h3>Activo</h3><p><b>ID:</b> {activo_id}<br><b>Subtipo:</b> {subtipo} {marca} {modelo}<br>'
+                    f'<h3>Activo</h3>'
+                    f'<p><b>ID:</b> {activo_id}<br><b>Subtipo:</b> {subtipo} {marca} {modelo}<br>'
                     f'<b>Serie:</b> {serie}<br><b>Estado:</b> {estado}<br>'
-                    f'<b>Ubicacion:</b> {edificio} - {sala}</p>'
-                    f'<h3>Responsable</h3><p><b>Nombre:</b> {nombre_resp}<br>'
-                    f'<b>RUT:</b> {rut_resp}<br><b>Cargo:</b> {cargo_resp}<br>'
-                    f'<b>Correo:</b> {email_resp}</p>'
+                    f'<b>Ubicacion:</b> {edificio} - {sala}<br><b>Documento:</b> {documento}</p>'
+                    f'<h3>Responsable</h3>'
+                    f'<p><b>Nombre:</b> {nombre_resp}<br><b>RUT:</b> {rut_resp}<br>'
+                    f'<b>Cargo:</b> {cargo_resp}<br><b>Correo:</b> {email_resp}</p>'
                     + (f'<h3>Observaciones</h3><p>{obs}</p>' if obs else '')
                     + '</body></html>')
             pdf_bytes = html.encode('utf-8')
-            ext_adj, mime_adj = 'html', 'text/html'
+            nombre_archivo = f'Acta_{activo_id}_{folio}.html'
+            mime_tipo = 'text/html'
 
-        def enviar(dest, es_resp):
-            msg = MIMEMultipart()
-            msg['From']    = smtp_user
-            msg['To']      = dest
-            msg['Subject'] = f'Acta de Entrega - {activo_id} - {data.get("nombre_resp","")}'
-            cuerpo = (
-                f'Estimado/a,\n\n'
-                f'{"Se adjunta el Acta de Entrega que firmaste para el activo indicado." if es_resp else "Se adjunta el Acta de Entrega firmada por el responsable del activo."}\n\n'
-                f'- Activo: {activo_id} - {subtipo} {marca} {modelo}\n'
-                f'- Responsable: {nombre_resp} | RUT: {rut_resp or "-"} | Cargo: {cargo_resp or "-"}\n'
-                f'- Estado: {estado} | Ubicacion: {edificio} - {sala}\n'
-                f'- Folio: {folio} | Fecha: {fecha_acta}\n\n'
-                f'{"Conserva este correo como respaldo de tu responsabilidad sobre el activo." if es_resp else "Respaldo del proceso de asignacion de activo fijo."}\n\n'
-                f'Colegio Centenario de Temuco - Sistema de Activos Fijos'
-            )
-            msg.attach(MIMEText(cuerpo,'plain','utf-8'))
-            tipo_mime = mime_adj.split('/')
-            adj = MIMEBase(tipo_mime[0], tipo_mime[1])
-            adj.set_payload(pdf_bytes)
-            encoders.encode_base64(adj)
-            adj.add_header('Content-Disposition','attachment',
-                           filename=f'Acta_{activo_id}_{folio}.{ext_adj}')
-            msg.attach(adj)
-            # Intentar SSL (465) y si falla, STARTTLS (587)
-            try:
-                with smtplib.SMTP_SSL('smtp.gmail.com', 465, timeout=15) as srv:
-                    srv.login(smtp_user, smtp_pass)
-                    srv.sendmail(smtp_user, dest, msg.as_string())
-            except OSError:
-                with smtplib.SMTP('smtp.gmail.com', 587, timeout=15) as srv:
-                    srv.ehlo()
-                    srv.starttls()
-                    srv.ehlo()
-                    srv.login(smtp_user, smtp_pass)
-                    srv.sendmail(smtp_user, dest, msg.as_string())
-
-        try:
-            enviar(email_resp, True)
-        except Exception as smtp_err:
-            print(f'[emitir_acta] Error enviando a {email_resp}: {smtp_err}')
-            return jsonify({'ok':False,'error':f'Error al enviar correo a {email_resp}: {str(smtp_err)}'}), 500
-
-        try:
-            if email_admin and email_admin != email_resp:
-                enviar(email_admin, False)
-        except Exception as smtp_err2:
-            print(f'[emitir_acta] Error enviando copia a admin: {smtp_err2}')
-            # No falla si solo falla la copia al admin
-
+        # Registrar en historial (solo texto, sin guardar el archivo)
         db_execute(
             "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-            (activo_id,'Acta',
-             f'Acta emitida - Folio {folio} - Responsable: {data.get("nombre_resp","")} ({email_resp})',
+            (activo_id, 'Acta',
+             f'Acta generada - Folio {folio} - Responsable: {data.get("nombre_resp","")} ({email_resp})',
              session['user'])
         )
-        return jsonify({'ok':True,'folio':folio})
+
+        # Retornar PDF como base64 para descarga en el navegador
+        pdf_b64 = base64.b64encode(pdf_bytes).decode('ascii')
+        return jsonify({
+            'ok': True,
+            'folio': folio,
+            'pdf_b64': pdf_b64,
+            'nombre_archivo': nombre_archivo,
+            'mime_tipo': mime_tipo
+        })
 
     except Exception as e:
         import traceback; traceback.print_exc()
         return jsonify({'ok':False,'error':str(e)}), 500
+
 
 @app.route('/api/proveedores', methods=['GET'])
 @login_required
