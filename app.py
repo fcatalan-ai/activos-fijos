@@ -1,5 +1,9 @@
 from flask import Flask, render_template, request, jsonify, redirect, url_for, session, send_file
-import os, io, base64, struct, zlib
+import os, io, base64, struct, zlib, smtplib, textwrap
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from email.mime.base import MIMEBase
+from email import encoders
 from datetime import datetime
 from functools import wraps
 
@@ -25,112 +29,8 @@ TIPOS = [
     'Mobiliario',
     'Muebles y Útiles',
     'Instalaciones Generales',
-    'Terreno',
-    'Bien Raíz',
     'Otro',
 ]
-
-# Tipos que NO se deprecian (solo tienen corrección monetaria)
-TIPOS_SIN_DEPRECIACION = {'Terreno'}
-
-# Tipos cuya vida útil se ingresa en MESES (no años)
-TIPOS_VIDA_MESES = {'Bien Raíz'}
-
-# ─────────────────────────────────────────────────────────────────────────────
-# CORRECCIÓN MONETARIA SII — Tablas oficiales por año de ejercicio
-# Fuente: www.sii.cl → Corrección Monetaria Mensual (Término de Giro)
-# Estructura: CM_SII[año_ejercicio][mes_adq] = % CM
-#   mes 0 = "Capital Inicial" (activos adquiridos ANTES de ese año ejercicio)
-#   mes 1..12 = activos adquiridos en ese mes DENTRO del año ejercicio
-# Años cerrados usan columna Dic. Año en curso usa último mes publicado.
-# NOTA SII: % negativos se tratan como 0 (art. 41 LIR).
-# Actualizar cada año con valores publicados en www.sii.cl
-# ─────────────────────────────────────────────────────────────────────────────
-CM_SII = {
-    2017: {  # Columna Dic (año cerrado)
-        0:1.9,  1:2.1,  2:1.6,  3:1.3,  4:0.9,  5:0.7,
-        6:0.6,  7:1.0,  8:0.7,  9:0.5,  10:0.7, 11:0.1, 12:0.0
-    },
-    2018: {  # Columna Dic (año cerrado)
-        0:2.8,  1:2.7,  2:2.2,  3:2.2,  4:1.9,  5:1.6,
-        6:1.3,  7:1.2,  8:0.9,  9:0.7,  10:0.4, 11:0.0, 12:0.0
-    },
-    2019: {  # Columna Dic (año cerrado)
-        0:2.8,  1:2.9,  2:2.8,  3:2.7,  4:2.3,  5:2.0,
-        6:1.4,  7:1.3,  8:1.1,  9:0.9,  10:0.9, 11:0.1, 12:0.0
-    },
-    2020: {  # Columna Dic (año cerrado)
-        0:2.7,  1:2.6,  2:2.1,  3:1.6,  4:1.3,  5:1.3,
-        6:1.4,  7:1.4,  8:1.3,  9:1.2,  10:0.5, 11:0.0, 12:0.0
-    },
-    2021: {  # Columna Dic (año cerrado)
-        0:6.7,  1:6.3,  2:5.6,  3:5.4,  4:5.0,  5:4.6,
-        6:4.3,  7:4.3,  8:3.4,  9:3.1,  10:1.8, 11:0.5, 12:0.0
-    },
-    2022: {  # Columna Dic (año cerrado)
-        0:13.3, 1:12.5, 2:11.1, 3:10.8, 4:8.8,  5:7.3,
-        6:6.0,  7:5.0,  8:3.6,  9:2.4,  10:1.5, 11:1.0, 12:0.0
-    },
-    2023: {  # Columna Dic (año cerrado)
-        0:4.8,  1:4.5,  2:3.7,  3:3.7,  4:2.6,  5:2.3,
-        6:2.2,  7:2.3,  8:2.0,  9:1.9,  10:1.2, 11:0.7, 12:0.0
-    },
-    2024: {  # Columna Dic (año cerrado)
-        0:4.2,  1:4.7,  2:4.0,  3:3.4,  4:3.0,  5:2.5,
-        6:2.2,  7:2.3,  8:1.6,  9:1.3,  10:1.2, 11:0.3, 12:0.0
-    },
-    2025: {  # Columna Dic (año cerrado)
-        0:3.4,  1:3.6,  2:2.6,  3:2.2,  4:1.6,  5:1.4,
-        6:1.2,  7:1.7,  8:0.8,  9:0.7,  10:0.3, 11:0.3, 12:0.0
-    },
-    2026: {  # Columna Jul (año en curso — actualizar mensualmente con SII)
-        0:2.6,  1:2.8,  2:2.4,  3:2.4,  4:1.4,  5:0.2,
-        6:0.0,  7:0.0
-    },
-}
-
-def _parsear_fecha_cm(fecha_str):
-    for fmt in ['%d-%m-%Y','%Y-%m-%d','%d/%m/%Y']:
-        try:
-            return datetime.strptime(str(fecha_str)[:10], fmt)
-        except: pass
-    return None
-
-def calcular_factor_cm(fecha_compra_str, factor_manual=None):
-    """
-    Calcula factor CM acumulado encadenando los % anuales del SII desde adquisición.
-    - Año de adquisición: usa % del mes específico de compra (tabla de ese año)
-    - Años siguientes: usa % de "Capital Inicial" (mes 0) de cada año
-    - % negativos se tratan como 0 (norma SII)
-    - Si hay factor_manual, lo usa directamente.
-    Retorna (factor, fuente) donde fuente es 'auto' o 'manual'.
-    """
-    if factor_manual:
-        try:
-            f = float(factor_manual)
-            if f > 0:
-                return f, 'manual'
-        except: pass
-
-    fecha = _parsear_fecha_cm(fecha_compra_str)
-    if not fecha:
-        return 1.0, 'sin_fecha'
-
-    anio_adq = fecha.year
-    mes_adq  = fecha.month
-    factor   = 1.0
-
-    for ejercicio in sorted(CM_SII.keys()):
-        if ejercicio < anio_adq:
-            continue
-        tabla = CM_SII[ejercicio]
-        if ejercicio == anio_adq:
-            pct = tabla.get(mes_adq, tabla.get(0, 0.0))
-        else:
-            pct = tabla.get(0, 0.0)
-        factor *= (1 + max(0.0, pct) / 100)
-
-    return round(factor, 4), 'auto'
 
 # SII vida util por tipo
 VIDA_UTIL_SII = {
@@ -139,13 +39,6 @@ VIDA_UTIL_SII = {
     'Equipamiento Deportivo':   5,
     'Mobiliario':               7,
     'Muebles y Útiles':         7,
-    'Instalaciones Generales':  10,
-    # Terreno: no se deprecia, vida útil indefinida (0 = no aplica)
-    'Terreno':                  0,
-    # Bien Raíz: vida útil en MESES (remanente al momento del registro)
-    # SII permite hasta 80 años para construcciones nuevas;
-    # para usadas se registra el remanente real. Default: 480 meses (40 años)
-    'Bien Raíz':                480,
     'Otro':                     7,
 }
 
@@ -290,7 +183,6 @@ with app.app_context():
             ('url_oc', 'TEXT', "''"),
             ('proveedor', 'TEXT', "''"),
             ('cantidad', 'INTEGER', '1'),
-            ('factor_cm_manual', 'REAL', 'NULL'),
         ]:
             try:
                 if mode_m == 'pg':
@@ -349,36 +241,6 @@ with app.app_context():
                 created_at TEXT DEFAULT CURRENT_TIMESTAMP
             )''')
         conn_m.commit()
-
-        # Migración: convertir precio de REAL a BIGINT para preservar exactitud en pesos CLP
-        try:
-            if mode_m == 'pg':
-                cur_m.execute("""
-                    ALTER TABLE activos
-                    ALTER COLUMN precio TYPE BIGINT
-                    USING ROUND(precio)::BIGINT
-                """)
-                conn_m.commit()
-        except Exception as e_precio:
-            # Ya es BIGINT u otro error: ignorar
-            conn_m.rollback()
-
-        # Índices para acelerar búsquedas frecuentes
-        indices = [
-            ("idx_activos_subtipo",  "activos(subtipo)"),
-            ("idx_activos_tipo",     "activos(tipo)"),
-            ("idx_activos_estado",   "activos(estado)"),
-            ("idx_activos_edificio", "activos(edificio)"),
-            ("idx_activos_resp",     "activos(responsable)"),
-            ("idx_activos_doc",      "activos(documento)"),
-            ("idx_activos_cc",       "activos(centro_costo)"),
-            ("idx_activos_prov",     "activos(proveedor)"),
-        ]
-        for idx_name, idx_cols in indices:
-            try:
-                cur_m.execute(f"CREATE INDEX IF NOT EXISTS {idx_name} ON {idx_cols}")
-            except: pass
-        conn_m.commit()
         conn_m.close()
     except Exception as e_m:
         print(f"Migracion mantenciones: {e_m}")
@@ -421,23 +283,213 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated
 
-@app.route('/api/activos/<id>/factor-cm', methods=['POST'])
+@app.route('/api/activos/emitir-acta', methods=['POST'])
 @admin_required
-def actualizar_factor_cm(id):
+def emitir_acta():
     data = request.json or {}
-    factor = data.get('factor')
-    if factor is None:
-        db_execute("UPDATE activos SET factor_cm_manual=NULL WHERE id=?", (id,))
-        return jsonify({'ok': True, 'fuente': 'auto'})
     try:
-        factor = float(factor)
-        if factor <= 0: return jsonify({'error': 'Factor debe ser mayor a 0'}), 400
-        db_execute("UPDATE activos SET factor_cm_manual=? WHERE id=?", (factor, id))
-        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
-                   (id, 'Edición', f'Factor CM actualizado manualmente: {factor}', session['user']))
-        return jsonify({'ok': True, 'fuente': 'manual', 'factor': factor})
-    except:
-        return jsonify({'error': 'Factor inválido'}), 400
+        # ── Datos del acta ────────────────────────────────────────────────
+        activo_id   = data.get('activo_id','')
+        subtipo     = data.get('subtipo','')
+        marca       = data.get('marca','')
+        modelo      = data.get('modelo','')
+        serie       = data.get('serie','—')
+        estado      = data.get('estado','')
+        edificio    = data.get('edificio','')
+        sala        = data.get('sala','')
+        fecha_compra= data.get('fecha_compra','')
+        precio      = data.get('precio',0)
+        documento   = data.get('documento','')
+        nombre_resp = data.get('nombre_resp','')
+        rut_resp    = data.get('rut_resp','')
+        cargo_resp  = data.get('cargo_resp','')
+        email_resp  = data.get('email_resp','')
+        obs         = data.get('observaciones','')
+        firma_b64   = data.get('firma_base64','')  # data:image/png;base64,...
+        fecha_acta  = datetime.now().strftime('%d-%m-%Y %H:%M')
+        folio       = datetime.now().strftime('%Y%m%d%H%M%S')
+
+        # ── Configuración SMTP ────────────────────────────────────────────
+        smtp_user  = os.environ.get('ACTA_SMTP_USER','')
+        smtp_pass  = os.environ.get('ACTA_SMTP_PASS','')
+        email_admin= os.environ.get('ACTA_EMAIL_ADMIN','')
+        if not smtp_user or not smtp_pass:
+            return jsonify({'ok':False,'error':'Credenciales SMTP no configuradas en variables de entorno'}), 500
+
+        # ── Generar PDF con HTML embebido (usando reportlab-like via bytes) ─
+        # Usamos el módulo fpdf2 si está disponible, sino generamos HTML para adjuntar
+        try:
+            from fpdf import FPDF
+            pdf = FPDF()
+            pdf.add_page()
+            pdf.set_margins(20, 20, 20)
+
+            # Encabezado
+            pdf.set_font('Helvetica','B', 16)
+            pdf.set_fill_color(31, 56, 100)
+            pdf.set_text_color(255,255,255)
+            pdf.cell(0, 12, 'ACTA DE ENTREGA / RESPONSABILIDAD', ln=True, align='C', fill=True)
+            pdf.set_text_color(0,0,0)
+            pdf.ln(4)
+
+            pdf.set_font('Helvetica','', 10)
+            pdf.cell(0, 6, f'Colegio Centenario de Temuco  |  Folio: {folio}  |  Fecha: {fecha_acta}', ln=True, align='C')
+            pdf.ln(6)
+
+            # Sección activo
+            def seccion(titulo):
+                pdf.set_font('Helvetica','B',11)
+                pdf.set_fill_color(220,228,240)
+                pdf.cell(0, 8, f'  {titulo}', ln=True, fill=True)
+                pdf.set_font('Helvetica','',10)
+                pdf.ln(2)
+
+            def fila(label, valor, ancho_label=55):
+                pdf.set_font('Helvetica','B',10)
+                pdf.cell(ancho_label, 7, label+':')
+                pdf.set_font('Helvetica','',10)
+                pdf.cell(0, 7, str(valor), ln=True)
+
+            seccion('DATOS DEL ACTIVO FIJO')
+            fila('ID / Código',    activo_id)
+            fila('Tipo / Subtipo', f'{subtipo}')
+            fila('Marca / Modelo', f'{marca} {modelo}'.strip())
+            fila('N° Serie',       serie)
+            fila('Estado',         estado)
+            fila('Ubicación',      f'{edificio} — {sala}' if sala else edificio)
+            fila('N° Documento',   documento)
+            fila('Fecha compra',   fecha_compra)
+            fila('Precio',         f'${int(precio):,}'.replace(',','.') if precio else '—')
+            pdf.ln(4)
+
+            seccion('DATOS DEL RESPONSABLE')
+            fila('Nombre completo', nombre_resp)
+            fila('RUT',             rut_resp or '—')
+            fila('Cargo / Función', cargo_resp or '—')
+            fila('Correo',          email_resp)
+            pdf.ln(4)
+
+            if obs:
+                seccion('OBSERVACIONES')
+                pdf.set_font('Helvetica','',10)
+                pdf.multi_cell(0, 6, obs)
+                pdf.ln(4)
+
+            seccion('DECLARACIÓN')
+            pdf.set_font('Helvetica','',10)
+            declaracion = (
+                f'El/La suscrito/a {nombre_resp}, RUT {rut_resp or "—"}, con cargo {cargo_resp or "—"}, '
+                f'declara haber recibido conforme el activo fijo identificado como {activo_id} '
+                f'({subtipo} {marca} {modelo}).strip(), comprometiéndose a su uso responsable, '
+                f'conservación y restitución cuando sea requerido por la institución. '
+                f'La presente acta es de carácter vinculante para efectos administrativos y patrimoniales '
+                f'del Colegio Centenario de Temuco.'
+            )
+            pdf.multi_cell(0, 6, declaracion)
+            pdf.ln(8)
+
+            # Firma
+            if firma_b64 and 'base64,' in firma_b64:
+                raw_b64 = firma_b64.split('base64,')[1]
+                firma_bytes = base64.b64decode(raw_b64)
+                firma_path = f'/tmp/firma_{folio}.png'
+                with open(firma_path,'wb') as f_firma:
+                    f_firma.write(firma_bytes)
+                pdf.set_font('Helvetica','B',10)
+                pdf.cell(0, 6, 'Firma del responsable:', ln=True)
+                pdf.image(firma_path, x=20, w=80, h=30)
+                pdf.ln(2)
+                pdf.set_font('Helvetica','',9)
+                pdf.cell(0, 5, f'_________________________', ln=True)
+                pdf.cell(0, 5, f'{nombre_resp}', ln=True)
+                pdf.cell(0, 5, f'RUT: {rut_resp or "—"}  |  {fecha_acta}', ln=True)
+
+            pdf_bytes = pdf.output(dest='S').encode('latin-1')
+
+        except ImportError:
+            # Fallback: generar HTML simple como adjunto si fpdf no está instalado
+            html_acta = f"""<html><body style='font-family:Arial;margin:30px'>
+            <h2 style='background:#1F3864;color:#fff;padding:10px'>ACTA DE ENTREGA - {activo_id}</h2>
+            <p><b>Folio:</b> {folio} &nbsp;&nbsp; <b>Fecha:</b> {fecha_acta}</p>
+            <h3>Activo</h3>
+            <table><tr><td><b>ID:</b></td><td>{activo_id}</td></tr>
+            <tr><td><b>Subtipo:</b></td><td>{subtipo} {marca} {modelo}</td></tr>
+            <tr><td><b>Serie:</b></td><td>{serie}</td></tr>
+            <tr><td><b>Estado:</b></td><td>{estado}</td></tr>
+            <tr><td><b>Ubicación:</b></td><td>{edificio} — {sala}</td></tr>
+            <tr><td><b>Documento:</b></td><td>{documento}</td></tr></table>
+            <h3>Responsable</h3>
+            <table><tr><td><b>Nombre:</b></td><td>{nombre_resp}</td></tr>
+            <tr><td><b>RUT:</b></td><td>{rut_resp}</td></tr>
+            <tr><td><b>Cargo:</b></td><td>{cargo_resp}</td></tr>
+            <tr><td><b>Correo:</b></td><td>{email_resp}</td></tr></table>
+            {'<h3>Observaciones</h3><p>'+obs+'</p>' if obs else ''}
+            </body></html>"""
+            pdf_bytes = html_acta.encode('utf-8')
+
+        # ── Enviar correo a ambas partes ──────────────────────────────────
+        def enviar(destinatario, es_responsable):
+            msg = MIMEMultipart()
+            msg['From']    = smtp_user
+            msg['To']      = destinatario
+            msg['Subject'] = f'Acta de Entrega — {activo_id} — {nombre_resp}'
+
+            cuerpo = f"""
+Estimado/a,
+
+{'Se adjunta el Acta de Entrega que firmaste para el activo:' if es_responsable else 'Se adjunta el Acta de Entrega firmada por el responsable:'}
+
+  • Activo: {activo_id} — {subtipo} {marca} {modelo}
+  • Responsable: {nombre_resp} ({rut_resp or '—'})
+  • Cargo: {cargo_resp or '—'}
+  • Estado: {estado}
+  • Ubicación: {edificio} — {sala}
+  • Fecha: {fecha_acta}
+  • Folio: {folio}
+
+{'Conserva este correo como respaldo de tu responsabilidad sobre el activo.' if es_responsable else 'Este correo queda como respaldo del proceso de asignación.'}
+
+Colegio Centenario de Temuco
+Sistema de Control de Activos Fijos
+"""
+            msg.attach(MIMEText(cuerpo, 'plain', 'utf-8'))
+
+            # Adjuntar acta
+            try:
+                from fpdf import FPDF
+                adj = MIMEBase('application','pdf')
+                adj.set_payload(pdf_bytes)
+                encoders.encode_base64(adj)
+                adj.add_header('Content-Disposition','attachment', filename=f'Acta_{activo_id}_{folio}.pdf')
+            except ImportError:
+                adj = MIMEBase('text','html')
+                adj.set_payload(pdf_bytes)
+                encoders.encode_base64(adj)
+                adj.add_header('Content-Disposition','attachment', filename=f'Acta_{activo_id}_{folio}.html')
+            msg.attach(adj)
+
+            with smtplib.SMTP_SSL('smtp.gmail.com', 465) as server:
+                server.login(smtp_user, smtp_pass)
+                server.sendmail(smtp_user, destinatario, msg.as_string())
+
+        enviar(email_resp, es_responsable=True)
+        if email_admin and email_admin != email_resp:
+            enviar(email_admin, es_responsable=False)
+
+        # ── Registrar en historial del activo ─────────────────────────────
+        db_execute(
+            "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+            (activo_id, 'Acta',
+             f'Acta de entrega emitida — Folio {folio} — Responsable: {nombre_resp} ({email_resp})',
+             session['user'])
+        )
+
+        return jsonify({'ok': True, 'folio': folio})
+
+    except Exception as e:
+        print(f'[emitir_acta] Error: {e}')
+        import traceback; traceback.print_exc()
+        return jsonify({'ok': False, 'error': str(e)}), 500
 
 @app.route('/api/proveedores', methods=['GET'])
 @login_required
@@ -503,48 +555,29 @@ def get_activos():
     anio = request.args.get('anio','')
     proveedor = request.args.get('proveedor','')
 
-    # Excluir columnas con datos pesados (base64 fotos/facturas) — se traen solo en /api/activos/<id>
-    cols = "id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,centro_costo,proveedor,factor_cm_manual"
-
+    sql = "SELECT * FROM activos WHERE 1=1"
     params = []
 
-    # Si hay búsqueda de texto, primero hacemos ILIKE en SQL sobre campos indexables
-    # (sin tildes — luego afinamos en Python para tildes/acentos)
+    # Filtros exactos (dropdowns)
+    if tipo:      sql += " AND tipo=?";         params.append(tipo)
+    if estado:    sql += " AND estado=?";        params.append(estado)
+    if edificio:  sql += " AND edificio=?";      params.append(edificio)
+    if cc:        sql += " AND centro_costo=?";  params.append(cc)
+    if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
+    if anio:
+        sql += " AND id LIKE ?"; params.append(f'AF-{anio[2:]}-%')
+
+    sql += " ORDER BY id DESC"
+    rows = db_fetchall(sql, params)
+
+    # Búsqueda de texto: normalizar tildes/mayúsculas en Python para mayor compatibilidad
     if q:
         import unicodedata
         def norm(s):
             return unicodedata.normalize('NFD', str(s or '').lower()).encode('ascii','ignore').decode()
         qn = norm(q)
-        # Buscar en SQL (rápido, sin tildes)
-        like = f'%{q}%'
-        like_norm = f'%{qn}%'
-        sql = f"""SELECT {cols} FROM activos WHERE 1=1
-            AND (id ILIKE ? OR subtipo ILIKE ? OR marca ILIKE ? OR modelo ILIKE ?
-                 OR serie ILIKE ? OR responsable ILIKE ? OR documento ILIKE ?
-                 OR sala ILIKE ? OR proveedor ILIKE ?)"""
-        params = [like]*9
-        # Filtros adicionales
-        if tipo:      sql += " AND tipo=?";         params.append(tipo)
-        if estado:    sql += " AND estado=?";        params.append(estado)
-        if edificio:  sql += " AND edificio=?";      params.append(edificio)
-        if cc:        sql += " AND centro_costo=?";  params.append(cc)
-        if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
-        if anio:      sql += " AND id LIKE ?";       params.append(f'AF-{anio[2:]}-%')
-        sql += " ORDER BY id DESC"
-        rows = db_fetchall(sql, params)
-        # Refinar en Python para tildes/acentos (sobre el subconjunto ya filtrado)
         campos = ['id','subtipo','marca','modelo','serie','responsable','documento','sala','proveedor']
         rows = [r for r in rows if any(qn in norm(r.get(c,'')) for c in campos)]
-    else:
-        sql = f"SELECT {cols} FROM activos WHERE 1=1"
-        if tipo:      sql += " AND tipo=?";         params.append(tipo)
-        if estado:    sql += " AND estado=?";        params.append(estado)
-        if edificio:  sql += " AND edificio=?";      params.append(edificio)
-        if cc:        sql += " AND centro_costo=?";  params.append(cc)
-        if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
-        if anio:      sql += " AND id LIKE ?";       params.append(f'AF-{anio[2:]}-%')
-        sql += " ORDER BY id DESC"
-        rows = db_fetchall(sql, params)
 
     return jsonify(rows)
 
@@ -563,131 +596,47 @@ def calcular_depreciacion(a):
         if not a.get('fecha_compra') or not a.get('precio'):
             return None
         fecha_str = str(a['fecha_compra'])
-        fecha = _parsear_fecha_cm(fecha_str)
+        # Intentar parsear fecha en varios formatos
+        for fmt in ['%d-%m-%Y','%Y-%m-%d','%d/%m/%Y']:
+            try:
+                fecha = datetime.strptime(fecha_str[:10], fmt)
+                break
+            except: fecha = None
         if not fecha: return None
 
-        precio_original = int(round(float(a['precio'])))
+        precio_original = float(a['precio'])
         if precio_original <= 0: return None
 
         tipo = a.get('tipo','Otro')
-        hoy  = datetime.now()
+        vida_util = int(a.get('vida_util') or VIDA_UTIL_SII.get(tipo, 7))
+        tasa_anual = 1.0 / vida_util
 
-        # Corrección Monetaria (aplica a todos los tipos)
-        factor_cm, fuente_cm = calcular_factor_cm(fecha_str, a.get('factor_cm_manual'))
-        desglose_cm = []
-        anio_adq = fecha.year
-        mes_adq  = fecha.month
-        for ejercicio in sorted(CM_SII.keys()):
-            if ejercicio < anio_adq: continue
-            tabla = CM_SII[ejercicio]
-            pct = max(0.0, tabla.get(mes_adq if ejercicio == anio_adq else 0, 0.0))
-            desglose_cm.append({'ejercicio': ejercicio, 'pct': round(pct, 1)})
+        hoy = datetime.now()
+        anos_transcurridos = (hoy - fecha).days / 365.25
+        valor_residual = precio_original * 0.10  # 10% valor residual SII
 
-        valor_corregido = round(precio_original * factor_cm)
+        depreciacion_acumulada = min(precio_original - valor_residual,
+                                     (precio_original - valor_residual) * tasa_anual * anos_transcurridos)
+        valor_actual = max(valor_residual, precio_original - depreciacion_acumulada)
+        porcentaje_dep = min(100, (depreciacion_acumulada / (precio_original - valor_residual)) * 100) if precio_original > valor_residual else 100
 
-        # ── TERRENO: solo CM, nunca se deprecia ──────────────────────────────
-        if tipo in TIPOS_SIN_DEPRECIACION:
-            return {
-                'precio_original':    precio_original,  # exacto
-                'factor_cm':          factor_cm,
-                'fuente_cm':          fuente_cm,
-                'desglose_cm':        desglose_cm,
-                'anio_adq':           anio_adq,
-                'mes_adq':            mes_adq,
-                'valor_corregido':    valor_corregido,
-                'valor_libro':        valor_corregido,   # = valor corregido siempre
-                'valor_residual':     valor_corregido,   # 100% residual
-                'depreciacion_acum':  0,
-                'porcentaje_dep':     0,
-                'anos_transcurridos': round((hoy - fecha).days / 365.25, 1),
-                'anos_restantes':     None,
-                'vida_util':          None,
-                'tasa_anual':         0,
-                'fecha_termino':      None,
-                'estado_dep':         'No deprecia',
-                'es_terreno':         True,
-            }
-
-        # ── BIEN RAÍZ: vida útil en MESES ────────────────────────────────────
-        if tipo in TIPOS_VIDA_MESES:
-            # vida_util se guarda en meses para Bien Raíz
-            meses_remanente = int(a.get('vida_util') or VIDA_UTIL_SII.get(tipo, 480))
-            vida_util_anos  = meses_remanente / 12
-            tasa_anual      = 1.0 / vida_util_anos if vida_util_anos > 0 else 0
-            valor_residual  = round(valor_corregido * 0.10)
-            anos_transcurr  = (hoy - fecha).days / 365.25
-            dep_acum = min(
-                valor_corregido - valor_residual,
-                (valor_corregido - valor_residual) * tasa_anual * anos_transcurr
-            )
-            valor_libro    = max(valor_residual, valor_corregido - dep_acum)
-            pct_dep        = min(100, dep_acum / (valor_corregido - valor_residual) * 100) if valor_corregido > valor_residual else 100
-            try:
-                fecha_termino = datetime(
-                    fecha.year + int(meses_remanente // 12),
-                    fecha.month + int(meses_remanente % 12), 1
-                )
-            except:
-                fecha_termino = datetime(fecha.year + int(vida_util_anos), fecha.month, fecha.day)
-            anos_rest = max(0, (fecha_termino - hoy).days / 365.25)
-            return {
-                'precio_original':    precio_original,  # exacto
-                'factor_cm':          factor_cm,
-                'fuente_cm':          fuente_cm,
-                'desglose_cm':        desglose_cm,
-                'anio_adq':           anio_adq,
-                'mes_adq':            mes_adq,
-                'valor_corregido':    valor_corregido,
-                'valor_libro':        round(valor_libro),
-                'valor_residual':     valor_residual,
-                'depreciacion_acum':  round(dep_acum),
-                'porcentaje_dep':     round(pct_dep, 1),
-                'anos_transcurridos': round(anos_transcurr, 1),
-                'anos_restantes':     round(anos_rest, 1),
-                'vida_util':          meses_remanente,
-                'vida_util_meses':    True,
-                'tasa_anual':         round(tasa_anual * 100, 2),
-                'fecha_termino':      fecha_termino.strftime('%d-%m-%Y'),
-                'estado_dep':         'Depreciado' if pct_dep >= 100 else
-                                      'Crítico'    if pct_dep >= 80  else
-                                      'Avanzado'   if pct_dep >= 50  else 'Normal',
-            }
-
-        # ── RESTO DE TIPOS: vida útil en AÑOS (comportamiento estándar) ───────
-        vida_util  = int(a.get('vida_util') or VIDA_UTIL_SII.get(tipo, 7))
-        tasa_anual = 1.0 / vida_util if vida_util > 0 else 0
-        valor_residual  = round(valor_corregido * 0.10)
-        anos_transcurr  = (hoy - fecha).days / 365.25
-        dep_acum = min(
-            valor_corregido - valor_residual,
-            (valor_corregido - valor_residual) * tasa_anual * anos_transcurr
-        )
-        valor_libro  = max(valor_residual, valor_corregido - dep_acum)
-        pct_dep      = min(100, dep_acum / (valor_corregido - valor_residual) * 100) if valor_corregido > valor_residual else 100
-        fecha_termino  = datetime(fecha.year + vida_util, fecha.month, fecha.day)
-        anos_rest      = max(0, (fecha_termino - hoy).days / 365.25)
+        fecha_termino = datetime(fecha.year + vida_util, fecha.month, fecha.day)
+        anos_restantes = max(0, (fecha_termino - hoy).days / 365.25)
 
         return {
-            'precio_original':    precio_original,  # exacto
-            'factor_cm':          factor_cm,
-            'fuente_cm':          fuente_cm,
-            'desglose_cm':        desglose_cm,
-            'anio_adq':           anio_adq,
-            'mes_adq':            mes_adq,
-            'valor_corregido':    valor_corregido,
-            'valor_libro':        round(valor_libro),
-            'valor_residual':     valor_residual,
-            'depreciacion_acum':  round(dep_acum),
-            'porcentaje_dep':     round(pct_dep, 1),
-            'anos_transcurridos': round(anos_transcurr, 1),
-            'anos_restantes':     round(anos_rest, 1),
-            'vida_util':          vida_util,
-            'vida_util_meses':    False,
-            'tasa_anual':         round(tasa_anual * 100, 2),
-            'fecha_termino':      fecha_termino.strftime('%d-%m-%Y'),
-            'estado_dep':         'Depreciado' if pct_dep >= 100 else
-                                  'Crítico'    if pct_dep >= 80  else
-                                  'Avanzado'   if pct_dep >= 50  else 'Normal',
+            'precio_original':      round(precio_original),
+            'valor_actual':         round(valor_actual),
+            'valor_residual':       round(valor_residual),
+            'depreciacion_acum':    round(depreciacion_acumulada),
+            'porcentaje_dep':       round(porcentaje_dep, 1),
+            'anos_transcurridos':   round(anos_transcurridos, 1),
+            'anos_restantes':       round(anos_restantes, 1),
+            'vida_util':            vida_util,
+            'tasa_anual':           round(tasa_anual * 100, 2),
+            'fecha_termino':        fecha_termino.strftime('%d-%m-%Y'),
+            'estado_dep':           'Depreciado' if porcentaje_dep >= 100 else
+                                    'Crítico' if porcentaje_dep >= 80 else
+                                    'Avanzado' if porcentaje_dep >= 50 else 'Normal',
         }
     except Exception as e:
         return None
@@ -707,7 +656,7 @@ def crear_activo():
         (aid, data.get('tipo'), data.get('subtipo'), data.get('marca'),
          data.get('modelo'), data.get('serie'), data.get('estado','Bueno'),
          data.get('edificio'), data.get('sala'), data.get('responsable'),
-         data.get('fecha_compra'), int(round(float(data.get('precio') or 0))), data.get('documento'),
+         data.get('fecha_compra'), data.get('precio',0), data.get('documento'),
          vida, data.get('observaciones',''), data.get('foto',''),
          centro_costo, proveedor))
     db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
@@ -1160,7 +1109,7 @@ def importar_excel():
                             "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo,proveedor) VALUES (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s)",
                             (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                              str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
-                             str(f['sala']), str(f['resp']), str(fecha), int(round(float(f['precio'] or 0))),
+                             str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
                              str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']), proveedor)
                         )
                         cur2.execute(
@@ -1172,7 +1121,7 @@ def importar_excel():
                             "INSERT INTO activos (id,tipo,subtipo,marca,modelo,serie,estado,edificio,sala,responsable,fecha_compra,precio,documento,vida_util,observaciones,foto,centro_costo,proveedor) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
                             (str(aid), str(f['tipo']), str(f['subtipo']), str(f['marca']),
                              str(f['modelo']), str(f['serie']), str(estado), str(f['edificio']),
-                             str(f['sala']), str(f['resp']), str(fecha), int(round(float(f['precio'] or 0))),
+                             str(f['sala']), str(f['resp']), str(fecha), float(f['precio']),
                              str(f['doc']), int(vida), str(f['obs']), '', str(f['cc']), proveedor)
                         )
                         cur2.execute(
