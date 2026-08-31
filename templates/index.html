@@ -555,7 +555,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     </div>
     <div class="form-row">
       <div class="form-group"><label>Cargo / Función</label><input id="acta-cargo" placeholder="Ej: Docente, Auxiliar"></div>
-      <div class="form-group"><label>Correo responsable *</label><input id="acta-email" type="email" placeholder="correo@colegiocentenariotemuco.cl"></div>
+      <div class="form-group"><label>Correo responsable <span style="font-weight:400;color:#999">(opcional)</span></label><input id="acta-email" type="email" placeholder="correo@colegiocentenariotemuco.cl"></div>
     </div>
     <div class="form-group">
       <label>Observaciones del estado del activo</label>
@@ -2111,7 +2111,6 @@ async function emitirActa(){
   const nombre = document.getElementById('acta-nombre').value.trim();
   const email  = document.getElementById('acta-email').value.trim();
   if(!nombre){ alert('El nombre del responsable es obligatorio.'); return; }
-  if(!email || !email.includes('@')){ alert('El correo del responsable es obligatorio.'); return; }
   if(firmaVacia){ alert('Por favor dibuja la firma del responsable antes de generar el acta.'); return; }
   const btn = document.getElementById('btn-emitir-acta');
   btn.disabled = true;
@@ -2128,7 +2127,7 @@ async function emitirActa(){
     cargo_resp: document.getElementById('acta-cargo').value.trim(),
     email_resp: email,
     observaciones: document.getElementById('acta-obs').value.trim(),
-    firma_base64: firmaCanvas.toDataURL('image/jpeg', 0.8),
+    firma_base64: firmaCanvas.toDataURL('image/png'),
   };
   try {
     const r = await fetch('/api/activos/emitir-acta', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)});
