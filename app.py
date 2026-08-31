@@ -447,23 +447,36 @@ def actualizar_factor_cm(id):
 @admin_required
 def emitir_acta():
     data = request.json or {}
+
+    def s(v):
+        """Sanitiza texto para Helvetica: reemplaza caracteres no-latin1 por equivalentes ASCII."""
+        return (str(v or '')
+                .replace('—','-').replace('–','-').replace('\u2014','-').replace('\u2013','-')
+                .replace('\u00e1','a').replace('\u00e9','e').replace('\u00ed','i')
+                .replace('\u00f3','o').replace('\u00fa','u').replace('\u00fc','u')
+                .replace('\u00c1','A').replace('\u00c9','E').replace('\u00cd','I')
+                .replace('\u00d3','O').replace('\u00da','U')
+                .replace('\u00f1','n').replace('\u00d1','N')
+                .replace('\u00fc','u').replace('\u00e7','c')
+                .encode('latin-1','replace').decode('latin-1'))
+
     try:
-        activo_id    = data.get('activo_id','')
-        subtipo      = data.get('subtipo','')
-        marca        = data.get('marca','')
-        modelo       = data.get('modelo','')
-        serie        = data.get('serie','—')
-        estado       = data.get('estado','')
-        edificio     = data.get('edificio','')
-        sala         = data.get('sala','')
-        fecha_compra = data.get('fecha_compra','')
+        activo_id    = s(data.get('activo_id',''))
+        subtipo      = s(data.get('subtipo',''))
+        marca        = s(data.get('marca',''))
+        modelo       = s(data.get('modelo',''))
+        serie        = s(data.get('serie','-'))
+        estado       = s(data.get('estado',''))
+        edificio     = s(data.get('edificio',''))
+        sala         = s(data.get('sala',''))
+        fecha_compra = s(data.get('fecha_compra',''))
         precio       = data.get('precio', 0)
-        documento    = data.get('documento','')
-        nombre_resp  = data.get('nombre_resp','')
-        rut_resp     = data.get('rut_resp','')
-        cargo_resp   = data.get('cargo_resp','')
-        email_resp   = data.get('email_resp','')
-        obs          = data.get('observaciones','')
+        documento    = s(data.get('documento',''))
+        nombre_resp  = s(data.get('nombre_resp',''))
+        rut_resp     = s(data.get('rut_resp',''))
+        cargo_resp   = s(data.get('cargo_resp',''))
+        email_resp   = data.get('email_resp','')   # email no se sanitiza
+        obs          = s(data.get('observaciones',''))
         firma_b64    = data.get('firma_base64','')
         fecha_acta   = datetime.now().strftime('%d-%m-%Y %H:%M')
         folio        = datetime.now().strftime('%Y%m%d%H%M%S')
@@ -472,15 +485,15 @@ def emitir_acta():
         smtp_pass   = os.environ.get('ACTA_SMTP_PASS','')
         email_admin = os.environ.get('ACTA_EMAIL_ADMIN','')
         if not smtp_user or not smtp_pass:
-            return jsonify({'ok':False,'error':'Credenciales SMTP no configuradas en variables de entorno'}), 500
+            return jsonify({'ok':False,'error':'Credenciales SMTP no configuradas'}), 500
 
-        # Generar PDF con fpdf2
         try:
             from fpdf import FPDF
             pdf = FPDF()
             pdf.add_page()
             pdf.set_margins(20, 20, 20)
 
+            # Encabezado
             pdf.set_font('Helvetica','B',16)
             pdf.set_fill_color(31,56,100)
             pdf.set_text_color(255,255,255)
@@ -488,60 +501,58 @@ def emitir_acta():
             pdf.set_text_color(0,0,0)
             pdf.ln(3)
             pdf.set_font('Helvetica','',10)
-            pdf.cell(0,6,f'Colegio Centenario de Temuco  |  Folio: {folio}  |  Fecha: {fecha_acta}',ln=True,align='C')
+            pdf.cell(0,6,f'Colegio Centenario de Temuco | Folio: {folio} | Fecha: {fecha_acta}',ln=True,align='C')
             pdf.ln(5)
 
-            def seccion(t):
+            def sec(titulo):
                 pdf.set_font('Helvetica','B',11)
                 pdf.set_fill_color(220,228,240)
-                pdf.cell(0,8,f'  {t}',ln=True,fill=True)
-                pdf.set_font('Helvetica','',10)
-                pdf.ln(2)
+                pdf.cell(0,8,f'  {titulo}',ln=True,fill=True)
+                pdf.set_font('Helvetica','',10); pdf.ln(2)
 
-            def fila(label, valor, w=60):
+            def row(label, valor, w=60):
                 pdf.set_font('Helvetica','B',10); pdf.cell(w,7,label+':')
-                pdf.set_font('Helvetica','',10);  pdf.cell(0,7,str(valor),ln=True)
+                pdf.set_font('Helvetica','',10);  pdf.multi_cell(0,7,str(valor))
 
-            seccion('DATOS DEL ACTIVO FIJO')
-            fila('ID / Código',   activo_id)
-            fila('Subtipo',       subtipo)
-            fila('Marca / Modelo',f'{marca} {modelo}'.strip())
-            fila('N° Serie',      serie)
-            fila('Estado',        estado)
-            fila('Ubicación',     f'{edificio} — {sala}' if sala else edificio)
-            fila('N° Documento',  documento)
-            fila('Fecha compra',  fecha_compra)
-            precio_fmt = f'${int(precio):,}'.replace(',','.') if precio else '—'
-            fila('Precio',        precio_fmt)
+            sec('DATOS DEL ACTIVO FIJO')
+            row('ID / Codigo',    activo_id)
+            row('Subtipo',        subtipo)
+            row('Marca / Modelo', f'{marca} {modelo}'.strip() or '-')
+            row('N serie',        serie or '-')
+            row('Estado',         estado)
+            row('Ubicacion',      f'{edificio} - {sala}'.strip(' -') or '-')
+            row('N Documento',    documento or '-')
+            row('Fecha compra',   fecha_compra or '-')
+            precio_fmt = f'${int(precio):,}'.replace(',','.') if precio else '-'
+            row('Precio',         precio_fmt)
             pdf.ln(4)
 
-            seccion('DATOS DEL RESPONSABLE')
-            fila('Nombre',   nombre_resp)
-            fila('RUT',      rut_resp or '—')
-            fila('Cargo',    cargo_resp or '—')
-            fila('Correo',   email_resp)
+            sec('DATOS DEL RESPONSABLE')
+            row('Nombre',  nombre_resp or '-')
+            row('RUT',     rut_resp    or '-')
+            row('Cargo',   cargo_resp  or '-')
+            row('Correo',  email_resp  or '-')
             pdf.ln(4)
 
             if obs:
-                seccion('OBSERVACIONES')
+                sec('OBSERVACIONES')
                 pdf.set_font('Helvetica','',10)
                 pdf.multi_cell(0,6,obs)
                 pdf.ln(4)
 
-            seccion('DECLARACIÓN')
+            sec('DECLARACION')
             pdf.set_font('Helvetica','',10)
-            declaracion = (
-                f'Yo, {nombre_resp}, RUT {rut_resp or "—"}, cargo {cargo_resp or "—"}, '
+            decl = (
+                f'Yo, {nombre_resp}, RUT {rut_resp or "-"}, cargo {cargo_resp or "-"}, '
                 f'declaro haber recibido conforme el activo fijo {activo_id} '
                 f'({subtipo} {marca} {modelo}).strip(), '
-                f'comprometiéndome a su uso responsable, conservación y restitución '
+                f'comprometiendome a su uso responsable, conservacion y restitucion '
                 f'cuando sea requerido. La presente acta es vinculante para efectos '
                 f'administrativos del Colegio Centenario de Temuco.'
             )
-            pdf.multi_cell(0,6,declaracion)
+            pdf.multi_cell(0,6,decl)
             pdf.ln(8)
 
-            # Insertar imagen de firma
             if firma_b64 and 'base64,' in firma_b64:
                 raw = firma_b64.split('base64,')[1]
                 firma_bytes = base64.b64decode(raw)
@@ -550,54 +561,49 @@ def emitir_acta():
                     ff.write(firma_bytes)
                 pdf.set_font('Helvetica','B',10)
                 pdf.cell(0,6,'Firma del responsable:',ln=True)
-                pdf.image(firma_path,x=20,w=80,h=30)
+                pdf.image(firma_path, x=20, w=80, h=30)
                 pdf.ln(2)
                 pdf.set_font('Helvetica','',9)
                 pdf.cell(0,5,'_________________________',ln=True)
                 pdf.cell(0,5,nombre_resp,ln=True)
-                pdf.cell(0,5,f'RUT: {rut_resp or "—"}  |  {fecha_acta}',ln=True)
+                pdf.cell(0,5,f'RUT: {rut_resp or "-"}  |  {fecha_acta}',ln=True)
 
             pdf_bytes = pdf.output(dest='S').encode('latin-1')
-            ext_adj = 'pdf'
-            mime_adj = 'application/pdf'
+            ext_adj, mime_adj = 'pdf', 'application/pdf'
 
         except ImportError:
-            # Fallback HTML si fpdf2 no está instalado
-            html = f"""<html><body style='font-family:Arial;margin:30px'>
-            <h2 style='background:#1F3864;color:#fff;padding:10px'>ACTA DE ENTREGA — {activo_id}</h2>
-            <p><b>Folio:</b> {folio} &nbsp; <b>Fecha:</b> {fecha_acta}</p>
-            <h3>Activo</h3>
-            <p><b>ID:</b> {activo_id} | <b>Subtipo:</b> {subtipo} {marca} {modelo}<br>
-            <b>Serie:</b> {serie} | <b>Estado:</b> {estado}<br>
-            <b>Ubicación:</b> {edificio} — {sala} | <b>Documento:</b> {documento}</p>
-            <h3>Responsable</h3>
-            <p><b>Nombre:</b> {nombre_resp} | <b>RUT:</b> {rut_resp}<br>
-            <b>Cargo:</b> {cargo_resp} | <b>Correo:</b> {email_resp}</p>
-            {'<h3>Observaciones</h3><p>'+obs+'</p>' if obs else ''}
-            </body></html>"""
+            html = (f'<html><body style="font-family:Arial;margin:30px">'
+                    f'<h2 style="background:#1F3864;color:#fff;padding:10px">ACTA DE ENTREGA - {activo_id}</h2>'
+                    f'<p><b>Folio:</b> {folio} | <b>Fecha:</b> {fecha_acta}</p>'
+                    f'<h3>Activo</h3><p><b>ID:</b> {activo_id}<br><b>Subtipo:</b> {subtipo} {marca} {modelo}<br>'
+                    f'<b>Serie:</b> {serie}<br><b>Estado:</b> {estado}<br>'
+                    f'<b>Ubicacion:</b> {edificio} - {sala}</p>'
+                    f'<h3>Responsable</h3><p><b>Nombre:</b> {nombre_resp}<br>'
+                    f'<b>RUT:</b> {rut_resp}<br><b>Cargo:</b> {cargo_resp}<br>'
+                    f'<b>Correo:</b> {email_resp}</p>'
+                    + (f'<h3>Observaciones</h3><p>{obs}</p>' if obs else '')
+                    + '</body></html>')
             pdf_bytes = html.encode('utf-8')
             ext_adj, mime_adj = 'html', 'text/html'
 
-        # Enviar correo
         def enviar(dest, es_resp):
             msg = MIMEMultipart()
             msg['From']    = smtp_user
             msg['To']      = dest
-            msg['Subject'] = f'Acta de Entrega — {activo_id} — {nombre_resp}'
-            cuerpo = f"""Estimado/a,
-
-{'Se adjunta el Acta de Entrega que firmaste para el activo indicado.' if es_resp else 'Se adjunta el Acta de Entrega firmada por el responsable del activo.'}
-
-• Activo: {activo_id} — {subtipo} {marca} {modelo}
-• Responsable: {nombre_resp} | RUT: {rut_resp or '—'} | Cargo: {cargo_resp or '—'}
-• Estado: {estado} | Ubicación: {edificio} — {sala}
-• Folio: {folio} | Fecha: {fecha_acta}
-
-{'Conserva este correo como respaldo de tu responsabilidad sobre el activo.' if es_resp else 'Respaldo del proceso de asignación de activo fijo.'}
-
-Colegio Centenario de Temuco — Sistema de Activos Fijos"""
+            msg['Subject'] = f'Acta de Entrega - {activo_id} - {data.get("nombre_resp","")}'
+            cuerpo = (
+                f'Estimado/a,\n\n'
+                f'{"Se adjunta el Acta de Entrega que firmaste para el activo indicado." if es_resp else "Se adjunta el Acta de Entrega firmada por el responsable del activo."}\n\n'
+                f'- Activo: {activo_id} - {subtipo} {marca} {modelo}\n'
+                f'- Responsable: {nombre_resp} | RUT: {rut_resp or "-"} | Cargo: {cargo_resp or "-"}\n'
+                f'- Estado: {estado} | Ubicacion: {edificio} - {sala}\n'
+                f'- Folio: {folio} | Fecha: {fecha_acta}\n\n'
+                f'{"Conserva este correo como respaldo de tu responsabilidad sobre el activo." if es_resp else "Respaldo del proceso de asignacion de activo fijo."}\n\n'
+                f'Colegio Centenario de Temuco - Sistema de Activos Fijos'
+            )
             msg.attach(MIMEText(cuerpo,'plain','utf-8'))
-            adj = MIMEBase(*mime_adj.split('/'))
+            tipo_mime = mime_adj.split('/')
+            adj = MIMEBase(tipo_mime[0], tipo_mime[1])
             adj.set_payload(pdf_bytes)
             encoders.encode_base64(adj)
             adj.add_header('Content-Disposition','attachment',
@@ -614,7 +620,7 @@ Colegio Centenario de Temuco — Sistema de Activos Fijos"""
         db_execute(
             "INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
             (activo_id,'Acta',
-             f'Acta de entrega emitida — Folio {folio} — Responsable: {nombre_resp} ({email_resp})',
+             f'Acta emitida - Folio {folio} - Responsable: {data.get("nombre_resp","")} ({email_resp})',
              session['user'])
         )
         return jsonify({'ok':True,'folio':folio})
