@@ -498,8 +498,14 @@ def emitir_acta():
         email_resp   = data.get('email_resp','')
         obs          = s(data.get('observaciones',''))
         firma_b64    = data.get('firma_base64','')
-        fecha_acta   = datetime.now().strftime('%d-%m-%Y %H:%M')
-        folio        = datetime.now().strftime('%Y%m%d%H%M%S')
+        try:
+            from zoneinfo import ZoneInfo
+            _now = datetime.now(ZoneInfo('America/Santiago'))
+        except Exception:
+            from datetime import timezone, timedelta
+            _now = datetime.now(timezone(timedelta(hours=-4)))
+        fecha_acta   = _now.strftime('%d-%m-%Y %H:%M')
+        folio        = _now.strftime('%Y%m%d%H%M%S')
 
         # Generar PDF en memoria — no se guarda en disco ni BD
         try:
@@ -570,8 +576,20 @@ def emitir_acta():
             if firma_b64 and 'base64,' in firma_b64:
                 raw = firma_b64.split('base64,')[1]
                 firma_bytes = base64.b64decode(raw)
-                firma_ext = 'jpg' if ('image/jpeg' in firma_b64 or 'image/jpg' in firma_b64) else 'png'
-                firma_path = f'/tmp/firma_{folio}.{firma_ext}'
+                # Agregar fondo blanco con Pillow para evitar fondo negro en JPEG
+                try:
+                    from PIL import Image
+                    import io as _io
+                    firma_img = Image.open(_io.BytesIO(firma_bytes)).convert('RGBA')
+                    fondo = Image.new('RGBA', firma_img.size, (255,255,255,255))
+                    fondo.paste(firma_img, mask=firma_img.split()[3])
+                    firma_final = fondo.convert('RGB')
+                    buf = _io.BytesIO()
+                    firma_final.save(buf, format='JPEG', quality=90)
+                    firma_bytes = buf.getvalue()
+                except Exception:
+                    pass  # Si Pillow falla, usar imagen original
+                firma_path = f'/tmp/firma_{folio}.jpg'
                 with open(firma_path,'wb') as ff:
                     ff.write(firma_bytes)
                 pdf.set_font('Helvetica','B',10)
