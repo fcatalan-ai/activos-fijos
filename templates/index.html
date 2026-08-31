@@ -573,7 +573,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     <div id="acta-status" style="font-size:12px;color:#666;margin-top:8px;min-height:18px"></div>
     <div class="modal-btns" style="margin-top:12px">
       <button class="btn-cancel" onclick="cerrarModal('modal-acta')">Cancelar</button>
-      <button class="btn-save" id="btn-emitir-acta" onclick="emitirActa()">📤 Emitir y Enviar Acta</button>
+      <button class="btn-save" id="btn-emitir-acta" onclick="emitirActa()">📥 Generar y Descargar Acta</button>
     </div>
   </div>
 </div>
@@ -2102,7 +2102,7 @@ function abrirModalActa(){
   document.getElementById('acta-obs').value = '';
   document.getElementById('acta-status').textContent = '';
   document.getElementById('btn-emitir-acta').disabled = false;
-  document.getElementById('btn-emitir-acta').textContent = '📤 Emitir y Enviar Acta';
+  document.getElementById('btn-emitir-acta').textContent = '📥 Generar y Descargar Acta';
   document.getElementById('modal-acta').classList.add('show');
   setTimeout(() => { limpiarFirma(); initFirmaCanvas(); }, 150);
 }
@@ -2112,11 +2112,11 @@ async function emitirActa(){
   const email  = document.getElementById('acta-email').value.trim();
   if(!nombre){ alert('El nombre del responsable es obligatorio.'); return; }
   if(!email || !email.includes('@')){ alert('El correo del responsable es obligatorio.'); return; }
-  if(firmaVacia){ alert('Por favor dibuja la firma del responsable antes de emitir el acta.'); return; }
+  if(firmaVacia){ alert('Por favor dibuja la firma del responsable antes de generar el acta.'); return; }
   const btn = document.getElementById('btn-emitir-acta');
   btn.disabled = true;
-  btn.textContent = 'Generando y enviando...';
-  document.getElementById('acta-status').textContent = '⏳ Preparando acta...';
+  btn.textContent = '⏳ Generando acta...';
+  document.getElementById('acta-status').textContent = 'Preparando PDF...';
   const payload = {
     activo_id: activoActual.id, subtipo: activoActual.subtipo||'',
     marca: activoActual.marca||'', modelo: activoActual.modelo||'',
@@ -2135,23 +2135,31 @@ async function emitirActa(){
     let d;
     const texto = await r.text();
     try { d = JSON.parse(texto); } catch(pe) {
-      // El servidor devolvió HTML en vez de JSON — mostrar primeras líneas
       const preview = texto.substring(0,200).replace(/</g,'&lt;');
-      document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ El servidor devolvió HTML (código ${r.status}). Respuesta: <code>${preview}</code></span>`;
-      btn.disabled=false; btn.textContent='📤 Emitir y Enviar Acta';
+      document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ Error del servidor (${r.status}): <code>${preview}</code></span>`;
+      btn.disabled=false; btn.textContent='📥 Generar y Descargar Acta';
       return;
     }
     if(d.ok){
-      document.getElementById('acta-status').innerHTML = `<span style="color:#27500A;font-weight:600">✅ Acta enviada a ${email} y al encargado. Folio: ${d.folio}</span>`;
-      btn.textContent = '✅ Enviada';
-      setTimeout(() => { cerrarModal('modal-acta'); abrirPanel(activoActual.id); }, 2500);
+      // Descargar PDF directamente en el navegador
+      const link = document.createElement('a');
+      link.href = `data:${d.mime_tipo};base64,${d.pdf_b64}`;
+      link.download = d.nombre_archivo;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      document.getElementById('acta-status').innerHTML =
+        `<span style="color:#27500A;font-weight:600">✅ Acta generada — Folio: ${d.folio}</span><br>
+        <span style="font-size:11px;color:#555">El PDF se descargó en tu dispositivo. Envíalo manualmente a <b>${email}</b> como respaldo del acta.</span>`;
+      btn.textContent = '✅ Descargada';
+      setTimeout(() => { cerrarModal('modal-acta'); abrirPanel(activoActual.id); }, 4000);
     } else {
-      document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ ${d.error||'Error al enviar'}</span>`;
-      btn.disabled=false; btn.textContent='📤 Emitir y Enviar Acta';
+      document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ ${d.error||'Error al generar el acta'}</span>`;
+      btn.disabled=false; btn.textContent='📥 Generar y Descargar Acta';
     }
   } catch(e) {
     document.getElementById('acta-status').innerHTML = `<span style="color:#c00">❌ Error: ${e.message}</span>`;
-    btn.disabled=false; btn.textContent='📤 Emitir y Enviar Acta';
+    btn.disabled=false; btn.textContent='📥 Generar y Descargar Acta';
   }
 }
 // ─── FIN ACTAS ───────────────────────────────────────────────────────────────
