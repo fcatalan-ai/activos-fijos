@@ -840,14 +840,15 @@ def calcular_depreciacion(a):
             meses_remanente = int(a.get('vida_util') or VIDA_UTIL_SII.get(tipo, 480))
             vida_util_anos  = meses_remanente / 12
             tasa_anual      = 1.0 / vida_util_anos if vida_util_anos > 0 else 0
-            valor_residual  = round(valor_corregido * 0.10)
+            # Bien Raíz: valor residual = 0% (SII — construcciones deprecian hasta $0)
+            valor_residual  = 0
             anos_transcurr  = (hoy - fecha).days / 365.25
             dep_acum = min(
-                valor_corregido - valor_residual,
-                (valor_corregido - valor_residual) * tasa_anual * anos_transcurr
+                valor_corregido,
+                valor_corregido * tasa_anual * anos_transcurr
             )
-            valor_libro    = max(valor_residual, valor_corregido - dep_acum)
-            pct_dep        = min(100, dep_acum / (valor_corregido - valor_residual) * 100) if valor_corregido > valor_residual else 100
+            valor_libro    = max(0, valor_corregido - dep_acum)
+            pct_dep        = min(100, dep_acum / valor_corregido * 100) if valor_corregido > 0 else 100
             try:
                 fecha_termino = datetime(
                     fecha.year + int(meses_remanente // 12),
