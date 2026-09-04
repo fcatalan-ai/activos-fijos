@@ -1740,6 +1740,9 @@ async function cargarMantenciones(id){
   if(!rows.length){
     el.innerHTML='<div class="loading">Sin mantenciones registradas</div>'; return;
   }
+  // Guardar datos en mapa para acceso por ID (evita problemas con JSON en onclick)
+  window._mantCache = {};
+  rows.forEach(m => { window._mantCache[m.id] = m; });
   el.innerHTML = rows.map(m=>`
     <div style="border:1px solid #e5e8ed;border-radius:8px;padding:12px;margin-bottom:8px;background:#fafafa">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
@@ -1757,7 +1760,7 @@ async function cargarMantenciones(id){
       </div>
       {% if rol == 'admin' %}
       <div style="text-align:right;margin-top:6px;display:flex;gap:6px;justify-content:flex-end">
-        <button class="btn-sm" style="font-size:10px" onclick="editarMant(${m.id},${JSON.stringify(m).replace(/'/g,'&#39;')})">✏️ Editar</button>
+        <button class="btn-sm" style="font-size:10px" onclick="editarMant(${m.id})">✏️ Editar</button>
         <button class="btn-sm" style="color:#c00;font-size:10px" onclick="eliminarMant(${m.id})">Eliminar</button>
       </div>
       {% endif %}
@@ -1781,7 +1784,9 @@ function abrirModalMant(){
   document.getElementById('modal-mant').classList.add('show');
 }
 
-function editarMant(mid, m){
+function editarMant(mid){
+  const m = (window._mantCache || {})[mid];
+  if(!m){ alert('No se encontraron los datos de la mantención.'); return; }
   _mantEditId = mid;
   document.getElementById('modal-mant-titulo').textContent = '✏️ Editar Mantención';
   document.getElementById('btn-guardar-mant').textContent = 'Guardar cambios';
