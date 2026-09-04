@@ -502,7 +502,7 @@ tr.seleccionado td{background:#EEF4FF !important}
 <!-- MODAL MANTENCION -->
 <div class="modal-bg" id="modal-mant">
   <div class="modal" style="max-width:500px">
-    <h3>🔧 Registrar Mantención / Reparación</h3>
+    <h3 id="modal-mant-titulo">🔧 Registrar Mantención / Reparación</h3>
     <div class="form-row">
       <div class="form-group"><label>Fecha *</label><input id="mn-fecha" type="date"></div>
       <div class="form-group"><label>Tipo</label>
@@ -521,7 +521,7 @@ tr.seleccionado td{background:#EEF4FF !important}
     </div>
     <div class="modal-btns">
       <button class="btn-cancel" onclick="cerrarModal('modal-mant')">Cancelar</button>
-      <button class="btn-save" onclick="guardarMant()">Guardar mantención</button>
+      <button class="btn-save" id="btn-guardar-mant" onclick="guardarMant()">Guardar mantención</button>
     </div>
   </div>
 </div>
@@ -1756,20 +1756,42 @@ async function cargarMantenciones(id){
         ${m.proxima_fecha?'<span>📅 Próx: '+m.proxima_fecha+'</span>':''}
       </div>
       {% if rol == 'admin' %}
-      <div style="text-align:right;margin-top:6px">
+      <div style="text-align:right;margin-top:6px;display:flex;gap:6px;justify-content:flex-end">
+        <button class="btn-sm" style="font-size:10px" onclick="editarMant(${m.id},${JSON.stringify(m).replace(/'/g,'&#39;')})">✏️ Editar</button>
         <button class="btn-sm" style="color:#c00;font-size:10px" onclick="eliminarMant(${m.id})">Eliminar</button>
       </div>
       {% endif %}
     </div>`).join('');
 }
 
+let _mantEditId = null; // null = nueva, número = editar
+
 function abrirModalMant(){
   if(!activoActual) return;
+  _mantEditId = null;
+  document.getElementById('modal-mant-titulo').textContent = '🔧 Registrar Mantención / Reparación';
+  document.getElementById('btn-guardar-mant').textContent = 'Guardar mantención';
   document.getElementById('mn-fecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('mn-tipo').value = 'correctiva';
   document.getElementById('mn-desc').value = '';
   document.getElementById('mn-costo').value = '';
   document.getElementById('mn-prov').value = '';
+  document.getElementById('mn-estado').value = 'solucionado';
   document.getElementById('mn-prox').value = '';
+  document.getElementById('modal-mant').classList.add('show');
+}
+
+function editarMant(mid, m){
+  _mantEditId = mid;
+  document.getElementById('modal-mant-titulo').textContent = '✏️ Editar Mantención';
+  document.getElementById('btn-guardar-mant').textContent = 'Guardar cambios';
+  document.getElementById('mn-fecha').value = m.fecha || '';
+  document.getElementById('mn-tipo').value = m.tipo || 'correctiva';
+  document.getElementById('mn-desc').value = m.descripcion || '';
+  document.getElementById('mn-costo').value = m.costo || '';
+  document.getElementById('mn-prov').value = m.proveedor || '';
+  document.getElementById('mn-estado').value = m.estado || 'solucionado';
+  document.getElementById('mn-prox').value = m.proxima_fecha || '';
   document.getElementById('modal-mant').classList.add('show');
 }
 
@@ -1785,8 +1807,15 @@ async function guardarMant(){
     proxima_fecha:document.getElementById('mn-prox').value,
   };
   if(!data.descripcion){ alert('La descripción es obligatoria'); return; }
-  await fetch('/api/activos/'+activoActual.id+'/mantenciones',
-    {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  if(_mantEditId){
+    // Editar existente
+    await fetch('/api/mantenciones/'+_mantEditId,
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  } else {
+    // Nueva
+    await fetch('/api/activos/'+activoActual.id+'/mantenciones',
+      {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+  }
   cerrarModal('modal-mant');
   cargarMantenciones(activoActual.id);
   cargarStats();
