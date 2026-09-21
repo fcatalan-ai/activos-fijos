@@ -665,6 +665,14 @@ def emitir_acta():
         return jsonify({'ok':False,'error':str(e)}), 500
 
 
+@app.route('/api/salas', methods=['GET'])
+@login_required
+def get_salas():
+    rows = db_fetchall(
+        "SELECT DISTINCT sala FROM activos WHERE sala IS NOT NULL AND sala != '' ORDER BY sala"
+    )
+    return jsonify([r['sala'] for r in rows])
+
 @app.route('/api/proveedores', methods=['GET'])
 @login_required
 def get_proveedores():
@@ -726,6 +734,7 @@ def get_activos():
     estado = request.args.get('estado','')
     edificio = request.args.get('edificio','')
     cc = request.args.get('centro_costo','')
+    sala = request.args.get('sala','')
     anio = request.args.get('anio','')
     proveedor = request.args.get('proveedor','')
 
@@ -754,6 +763,7 @@ def get_activos():
         if estado:    sql += " AND estado=?";        params.append(estado)
         if edificio:  sql += " AND edificio=?";      params.append(edificio)
         if cc:        sql += " AND centro_costo=?";  params.append(cc)
+        if sala:      sql += " AND sala=?";          params.append(sala)
         if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
         if anio:      sql += " AND id LIKE ?";       params.append(f'AF-{anio[2:]}-%')
         sql += " ORDER BY id DESC"
@@ -767,6 +777,7 @@ def get_activos():
         if estado:    sql += " AND estado=?";        params.append(estado)
         if edificio:  sql += " AND edificio=?";      params.append(edificio)
         if cc:        sql += " AND centro_costo=?";  params.append(cc)
+        if sala:      sql += " AND sala=?";          params.append(sala)
         if proveedor: sql += " AND proveedor=?";     params.append(proveedor)
         if anio:      sql += " AND id LIKE ?";       params.append(f'AF-{anio[2:]}-%')
         sql += " ORDER BY id DESC"
