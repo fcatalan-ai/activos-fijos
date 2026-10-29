@@ -75,8 +75,10 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
   <div class="tabs">
     <button class="tab active" onclick="showTab('ficha',this)">📋 Ficha</button>
     <button class="tab" onclick="showTab('documentos',this)">📎 Documentos</button>
+    {% if nivel == 'completo' %}
     <button class="tab" onclick="showTab('historial',this)">📜 Historial</button>
     <button class="tab" onclick="showTab('traslado',this)">🚚 Traslado</button>
+    {% endif %}
   </div>
 
   <!-- TAB FICHA -->
@@ -151,6 +153,7 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
   </div>
 
   <!-- TAB HISTORIAL -->
+  {% if nivel == 'completo' %}
   <div id="tab-historial" style="display:none">
     <div class="card">
       <div class="card-title">Historial de movimientos</div>
@@ -192,6 +195,7 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
       <div id="t-resultado"></div>
     </div>
   </div>
+  {% endif %}{# fin nivel completo #}
 </div>
 
 <!-- LIGHTBOX -->
@@ -201,11 +205,16 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
 </div>
 
 <script>
-const ACTIVO_ID = "{{ a.id }}";
+const ACTIVO_ID  = "{{ a.id }}";
+const NIVEL_ACCESO = "{{ nivel }}";   // 'completo' o 'basico'
 
 function showTab(tab, btn){
-  ['ficha','documentos','historial','traslado'].forEach(t=>{
-    document.getElementById('tab-'+t).style.display = t===tab?'block':'none';
+  const tabs = NIVEL_ACCESO === 'completo'
+    ? ['ficha','documentos','historial','traslado']
+    : ['ficha','documentos'];
+  tabs.forEach(t=>{
+    const el = document.getElementById('tab-'+t);
+    if(el) el.style.display = t===tab?'block':'none';
   });
   document.querySelectorAll('.tab').forEach(b=>b.classList.remove('active'));
   if(btn) btn.classList.add('active');
