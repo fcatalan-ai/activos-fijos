@@ -117,11 +117,11 @@ body{font-family:Arial,sans-serif;background:#f0f4f8;min-height:100vh}
     <div class="card">
       <div class="card-title">Depreciación</div>
       <div class="field-grid">
-        <div class="field-box"><label>Valor actual</label><div class="val" style="color:#1F3864">${{ "{:,.0f}".format(dep.valor_actual or 0).replace(',','.') }}</div></div>
-        <div class="field-box"><label>Depreciado</label><div class="val" style="color:#C00">{{ "%.1f"|format(dep.porcentaje or 0) }}%</div></div>
+        <div class="field-box"><label>Valor libro</label><div class="val" style="color:#1F3864">${{ "{:,.0f}".format(dep.valor_libro or 0).replace(',','.') }}</div></div>
+        <div class="field-box"><label>Depreciado</label><div class="val" style="color:#C00">{{ "%.1f"|format(dep.porcentaje_dep or 0) }}%</div></div>
       </div>
       <div class="dep-bar-bg">
-        <div class="dep-bar" style="width:{{ [dep.porcentaje or 0, 100]|min }}%;background:{{ '#C00' if (dep.porcentaje or 0) >= 80 else '#ED7D31' if (dep.porcentaje or 0) >= 50 else '#1F3864' }}"></div>
+        <div class="dep-bar" style="width:{{ [dep.porcentaje_dep or 0, 100]|min }}%;background:{{ '#C00' if (dep.porcentaje_dep or 0) >= 80 else '#ED7D31' if (dep.porcentaje_dep or 0) >= 50 else '#1F3864' }}"></div>
       </div>
     </div>
     {% endif %}
