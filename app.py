@@ -21,7 +21,8 @@ def too_large(e):
 def server_error(e):
     return jsonify({'ok':False,'error':f'Error interno del servidor: {str(e)}'}), 500
 DATABASE_URL = os.environ.get('DATABASE_URL', '')
-FICHA_PIN = os.environ.get('FICHA_PIN', '1234')
+FICHA_PIN        = os.environ.get('FICHA_PIN', '1234')         # acceso completo
+FICHA_PIN_BASICO = os.environ.get('FICHA_PIN_BASICO', '0000')  # solo ficha + documentos
 
 # Cloudinary config (para fotos de activos)
 import cloudinary
@@ -1474,19 +1475,25 @@ def _simple_qr_b64(text):
 def ficha_publica(id):
     error = ''
     # Verificar PIN en sesion
-    if not session.get('pin_ok'):
+    if not session.get('pin_nivel'):
         if request.method == 'POST':
             pin = request.form.get('pin','').strip()
             if pin == FICHA_PIN:
-                session['pin_ok'] = True
+                session['pin_ok']    = True
+                session['pin_nivel'] = 'completo'
+            elif pin == FICHA_PIN_BASICO:
+                session['pin_ok']    = True
+                session['pin_nivel'] = 'basico'
             else:
                 error = 'PIN incorrecto, intenta nuevamente'
-        if not session.get('pin_ok'):
+        if not session.get('pin_nivel'):
             return render_template('pin.html', id=id, error=error)
     a = db_fetchone("SELECT * FROM activos WHERE id=?", (id,))
     if not a: return "Activo no encontrado", 404
     dep = calcular_depreciacion(a)
-    return render_template('ficha_publica.html', a=a, dep=dep, centros=CENTROS_COSTO, edificios=['Básica','Media','Parvularia','Administración'])
+    nivel = session.get('pin_nivel', 'basico')
+    return render_template('ficha_publica.html', a=a, dep=dep, nivel=nivel,
+                           centros=CENTROS_COSTO, edificios=['Básica','Media','Parvularia','Administración'])
 
 @app.route('/api/stats')
 @login_required
