@@ -1162,20 +1162,18 @@ def eliminar_foto(id):
         return jsonify({'error': str(e)}), 500
 
 def _pdf_a_jpg(pdf_bytes, dpi=150, calidad=82):
-    """Convierte la primera página de un PDF a JPEG. Requiere pymupdf."""
-    import fitz  # pip install pymupdf
+    """Convierte la primera página de un PDF a JPEG. Requiere pypdfium2."""
+    import pypdfium2 as pdfium
     import io as _io
-    doc = fitz.open(stream=pdf_bytes, filetype='pdf')
-    pix = doc[0].get_pixmap(matrix=fitz.Matrix(dpi/72, dpi/72), alpha=False)
-    jpg = pix.tobytes('jpeg')
-    try:
-        from PIL import Image
-        buf = _io.BytesIO()
-        Image.open(_io.BytesIO(jpg)).convert('RGB').save(buf, format='JPEG',
-                                                          quality=calidad, optimize=True)
-        return buf.getvalue()
-    except Exception:
-        return jpg
+    from PIL import Image
+    doc  = pdfium.PdfDocument(pdf_bytes)
+    page = doc[0]
+    scale = dpi / 72
+    bitmap = page.render(scale=scale, rotation=0)
+    img = bitmap.to_pil()
+    buf = _io.BytesIO()
+    img.convert('RGB').save(buf, format='JPEG', quality=calidad, optimize=True)
+    return buf.getvalue()
 
 @app.route('/api/activos/<id>/documento', methods=['POST'])
 @admin_required
@@ -2293,12 +2291,12 @@ def get_historial_publico(id):
     return jsonify(movs)
 
 # ── RUTA TEMPORAL DE MIGRACIÓN ──────────────────────────────────────────────
-# Ejecutar UNA SOLA VEZ visitando /migrar-docs-cloudinary?clave=TU_SECRET_KEY
+# Ejecutar UNA SOLA VEZ visitando /migrar-docs-cloudinary?clave=TU_MIGRATION_KEY
 # Luego eliminar este bloque completo del código.
 @app.route('/migrar-docs-cloudinary')
 def migrar_docs_cloudinary():
     clave = request.args.get('clave', '')
-    if clave != os.environ.get('SECRET_KEY', ''):
+    if clave != os.environ.get('MIGRATION_KEY', ''):
         return 'Acceso denegado', 403
     import io as _io
     filas = db_fetchall("SELECT id, url_factura, url_oc FROM activos")
@@ -2314,13 +2312,12 @@ def migrar_docs_cloudinary():
                 mime = header.split(':')[1].split(';')[0]
                 raw  = base64.b64decode(b64)
                 if 'pdf' in mime:
-                    import fitz
-                    doc = fitz.open(stream=raw, filetype='pdf')
-                    pix = doc[0].get_pixmap(matrix=fitz.Matrix(150/72,150/72), alpha=False)
-                    jpg = pix.tobytes('jpeg')
-                    buf = _io.BytesIO()
+                    import pypdfium2 as pdfium
                     from PIL import Image
-                    Image.open(_io.BytesIO(jpg)).convert('RGB').save(buf, format='JPEG', quality=82, optimize=True)
+                    doc  = pdfium.PdfDocument(raw)
+                    bitmap = doc[0].render(scale=150/72, rotation=0)
+                    buf = _io.BytesIO()
+                    bitmap.to_pil().convert('RGB').save(buf, format='JPEG', quality=82, optimize=True)
                     raw = buf.getvalue()
                 res = cloudinary.uploader.upload(raw, public_id=f'activos-fijos/doc_{activo_id}_{sufijo}',
                                                   overwrite=True, resource_type='image')
