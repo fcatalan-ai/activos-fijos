@@ -2292,6 +2292,51 @@ def get_historial_publico(id):
         (id,))
     return jsonify(movs)
 
+# ── RUTA TEMPORAL DE MIGRACIÓN ──────────────────────────────────────────────
+# Ejecutar UNA SOLA VEZ visitando /migrar-docs-cloudinary?clave=TU_SECRET_KEY
+# Luego eliminar este bloque completo del código.
+@app.route('/migrar-docs-cloudinary')
+def migrar_docs_cloudinary():
+    clave = request.args.get('clave', '')
+    if clave != os.environ.get('SECRET_KEY', ''):
+        return 'Acceso denegado', 403
+    import io as _io
+    filas = db_fetchall("SELECT id, url_factura, url_oc FROM activos")
+    migrados, errores, log = 0, 0, []
+    for a in filas:
+        activo_id = a['id']
+        for campo, sufijo in [('url_factura','factura'),('url_oc','oc')]:
+            valor = a.get(campo) or ''
+            if not valor.startswith('data:'):
+                continue
+            try:
+                header, b64 = valor.split(',', 1)
+                mime = header.split(':')[1].split(';')[0]
+                raw  = base64.b64decode(b64)
+                if 'pdf' in mime:
+                    import fitz
+                    doc = fitz.open(stream=raw, filetype='pdf')
+                    pix = doc[0].get_pixmap(matrix=fitz.Matrix(150/72,150/72), alpha=False)
+                    jpg = pix.tobytes('jpeg')
+                    buf = _io.BytesIO()
+                    from PIL import Image
+                    Image.open(_io.BytesIO(jpg)).convert('RGB').save(buf, format='JPEG', quality=82, optimize=True)
+                    raw = buf.getvalue()
+                res = cloudinary.uploader.upload(raw, public_id=f'activos-fijos/doc_{activo_id}_{sufijo}',
+                                                  overwrite=True, resource_type='image')
+                url_nueva = res['secure_url']
+                db_execute(f"UPDATE activos SET {campo}=%s WHERE id=%s", (url_nueva, activo_id))
+                kb = len(valor)*3//4//1024
+                log.append(f'✅ {activo_id} {campo}: {kb} KB → Cloudinary')
+                migrados += 1
+            except Exception as e:
+                log.append(f'❌ {activo_id} {campo}: {e}')
+                errores += 1
+    resumen = f'<h2>Migración completada</h2><p>{migrados} migrados, {errores} errores</p>'
+    detalle = '<br>'.join(log) or 'No había documentos base64.'
+    return f'<pre style="font-family:monospace;padding:20px">{resumen}\n\n{detalle}</pre>'
+# ── FIN RUTA TEMPORAL ────────────────────────────────────────────────────────
+
 if __name__=='__main__':
     init_db()
     app.run(debug=False,host='0.0.0.0',port=int(os.environ.get('PORT',5000)))
