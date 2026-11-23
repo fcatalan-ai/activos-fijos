@@ -6,3 +6,4 @@ gunicorn==22.0.0
 psycopg2-binary==2.9.10
 cloudinary==1.36.0
 fpdf2
+pymupdf==1.24.9
