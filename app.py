@@ -1161,6 +1161,22 @@ def eliminar_foto(id):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+def _pdf_a_jpg(pdf_bytes, dpi=150, calidad=82):
+    """Convierte la primera página de un PDF a JPEG. Requiere pymupdf."""
+    import fitz  # pip install pymupdf
+    import io as _io
+    doc = fitz.open(stream=pdf_bytes, filetype='pdf')
+    pix = doc[0].get_pixmap(matrix=fitz.Matrix(dpi/72, dpi/72), alpha=False)
+    jpg = pix.tobytes('jpeg')
+    try:
+        from PIL import Image
+        buf = _io.BytesIO()
+        Image.open(_io.BytesIO(jpg)).convert('RGB').save(buf, format='JPEG',
+                                                          quality=calidad, optimize=True)
+        return buf.getvalue()
+    except Exception:
+        return jpg
+
 @app.route('/api/activos/<id>/documento', methods=['POST'])
 @admin_required
 def subir_documento(id):
@@ -1170,20 +1186,34 @@ def subir_documento(id):
     ext = file.filename.rsplit('.',1)[-1].lower()
     if ext not in {'pdf','jpg','jpeg','png'}: return jsonify({'error':'Solo PDF o imagen'}), 400
     data = file.read()
-    if len(data) > 5*1024*1024: return jsonify({'error':'Archivo muy grande (máx 5MB)'}), 400
+    if len(data) > 10*1024*1024: return jsonify({'error':'Archivo muy grande (máx 10MB)'}), 400
     try:
-        # Se guarda como base64 directo en la BD (PDFs livianos, evita problemas de
-        # visualización pública de Cloudinary en archivos tipo 'raw')
-        mime = 'application/pdf' if ext=='pdf' else f'image/{ext}'
-        b64 = f"data:{mime};base64," + base64.b64encode(data).decode()
+        # Si es PDF → convertir primera página a JPG para ahorrar espacio
+        if ext == 'pdf':
+            try:
+                data = _pdf_a_jpg(data)
+                ext  = 'jpg'
+            except Exception as e_pdf:
+                print(f'[documento] PDF→JPG falló: {e_pdf}')
+                return jsonify({'error': 'No se pudo convertir el PDF. Sube una imagen JPG/PNG.'}), 500
+
+        # Subir a Cloudinary (igual que las fotos) → solo la URL queda en la BD
         campo = 'url_factura' if tipo_doc == 'factura' else 'url_oc'
-        db_execute(f"UPDATE activos SET {campo}=? WHERE id=?", (b64, id))
-        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (?,?,?,?)",
+        resultado = cloudinary.uploader.upload(
+            data,
+            folder        = 'activos-fijos',
+            public_id     = f'doc_{id}_{tipo_doc}',
+            overwrite     = True,
+            resource_type = 'image',
+        )
+        url_doc = resultado.get('secure_url', '')
+        db_execute(f"UPDATE activos SET {campo}=%s WHERE id=%s", (url_doc, id))
+        db_execute("INSERT INTO movimientos (activo_id,tipo,descripcion,usuario) VALUES (%s,%s,%s,%s)",
                    (id, 'Documento', f'{tipo_doc.upper()} subida/actualizada', session['user']))
-        return jsonify({'ok':True, 'url': b64, 'tipo': tipo_doc})
+        return jsonify({'ok': True, 'url': url_doc, 'tipo': tipo_doc})
     except Exception as e:
         print(f"Error subir documento: {e}")
-        return jsonify({'error':str(e)}), 500
+        return jsonify({'error': str(e)}), 500
 
 @app.route('/api/activos/<id>/documento', methods=['DELETE'])
 @admin_required
